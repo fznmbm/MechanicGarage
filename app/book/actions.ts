@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { isYmd } from '@/lib/time';
+import { emailBookingConfirmation } from '@/lib/notify';
 
 export async function getSlots(garageId: string, date: string, duration: number): Promise<string[]> {
   if (!isYmd(date)) return [];
@@ -26,5 +27,13 @@ export async function submitBooking(input: {
     p_consent: input.consent,
   });
   if (error) return { ok: false, error: error.message };
-  return { ok: true, reference: (data as { reference: string }).reference };
+  const res = data as { reference: string; starts_at: string; service: string };
+  // confirmation email (best effort: the booking is already made)
+  try {
+    const { data: g } = await sb.rpc('garage_contact', { p_garage: input.garageId });
+    if (g?.notify_booking_email) {
+      await emailBookingConfirmation({ garage: g, to: input.email || null, name: input.name, startsAt: res.starts_at, service: res.service, registration: input.reg });
+    }
+  } catch (e) { console.error('Booking confirmation failed', e); }
+  return { ok: true, reference: res.reference };
 }

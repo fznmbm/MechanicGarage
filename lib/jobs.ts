@@ -17,3 +17,7 @@ export const minutesLabel = (mins: number) => {
   const m = Math.round(mins % 60);
   return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m`;
 };
+
+/** Wording the customer signs at check-in, unless the garage sets its own */
+export const DEFAULT_AUTHORISATION =
+  'I authorise the work described above and any further work I agree to. I accept the garage’s terms. Payment is due on collection.';

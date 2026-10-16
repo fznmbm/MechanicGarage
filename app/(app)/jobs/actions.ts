@@ -8,8 +8,10 @@ import { isPlausibleReg, normaliseReg } from '@/lib/reg';
 import { orNull, readCustomer, str } from '@/lib/validate';
 import { isYmd, ukLocalToUtcISO } from '@/lib/time';
 import { parsePounds } from '@/lib/money';
-import { JOB_FLOW } from '@/lib/jobs';
+import { DEFAULT_AUTHORISATION, JOB_FLOW } from '@/lib/jobs';
 import { VHC_TEMPLATE } from '@/lib/vhc';
+import { emailFeedbackRequest, emailReadyToCollect } from '@/lib/notify';
+import { siteOrigin } from '@/lib/url';
 import type { ActionState } from '@/lib/types';
 
 const fail = (errors: Record<string, string>, message = 'Please fix the highlighted fields'): ActionState =>
@@ -40,6 +42,7 @@ const LOCKED = 'This job has been invoiced. Void the invoice to change the work.
 const touch = (id: string) => {
   revalidatePath(`/jobs/${id}`);
   revalidatePath('/jobs');
+  revalidatePath('/workshop');
   revalidatePath('/');
 };
 
@@ -243,7 +246,54 @@ export async function setJobStatus(fd: FormData) {
       }
     }
   }
+  // automatic customer messages (best effort)
+  try {
+    if (status === 'complete' && job.status !== 'complete') await notifyReady(sb, m.garage_id, id);
+    if (status === 'collected' && job.status !== 'collected') await requestFeedback(sb, m.garage_id, id);
+  } catch (e) { console.error('Customer message failed', e); }
   touch(id);
+}
+
+type Sb = Awaited<ReturnType<typeof createClient>>;
+const one = <T,>(v: unknown): T | null => (Array.isArray(v) ? (v[0] as T) ?? null : (v as T | null));
+
+async function jobContact(sb: Sb, garageId: string, jobId: string) {
+  const [{ data: g }, { data: j }] = await Promise.all([
+    sb.from('garages').select('name, phone, email, brand_colour, notify_ready_email, feature_feedback, feedback_auto_email').eq('id', garageId).single(),
+    sb.from('jobs').select('customer_id, customer:customers(name, email), vehicle:vehicles(registration)').eq('id', jobId).single(),
+  ]);
+  return {
+    g, customerId: j?.customer_id as string | null,
+    cust: one<{ name: string; email: string | null }>(j?.customer),
+    reg: one<{ registration: string }>(j?.vehicle)?.registration ?? null,
+  };
+}
+
+async function notifyReady(sb: Sb, garageId: string, jobId: string) {
+  const { g, cust, reg } = await jobContact(sb, garageId, jobId);
+  if (!g?.notify_ready_email) return;
+  await emailReadyToCollect({ garage: g, to: cust?.email ?? null, name: cust?.name ?? null, registration: reg });
+}
+
+/** Optional feature: a feedback link for the customer once the car is collected */
+async function requestFeedback(sb: Sb, garageId: string, jobId: string) {
+  const { g, cust, reg, customerId } = await jobContact(sb, garageId, jobId);
+  if (!g?.feature_feedback) return;
+  await sb.from('job_feedback').insert({ garage_id: garageId, job_id: jobId, customer_id: customerId }); // ignored if it already exists
+  if (!g.feedback_auto_email || !cust?.email) return;
+  const { data: f } = await sb.rpc('feedback_token', { p_job: jobId });
+  if (!f) return;
+  const sent = await emailFeedbackRequest({ garage: g, to: cust.email, name: cust.name, registration: reg, link: `${await siteOrigin()}/f/${f}` });
+  if (sent) await sb.from('job_feedback').update({ sent_at: new Date().toISOString() }).eq('job_id', jobId);
+}
+
+/** Mark the feedback link as sent by WhatsApp (from the job card) */
+export async function markFeedbackSent(fd: FormData) {
+  const c = await ctx();
+  if (!c) return;
+  const jobId = str(fd, 'job_id');
+  await c.sb.from('job_feedback').update({ sent_at: new Date().toISOString() }).eq('job_id', jobId).eq('garage_id', c.m.garage_id);
+  touch(jobId);
 }
 
 /* ---------------- Lines ---------------- */
@@ -332,6 +382,24 @@ export async function toggleLineDone(fd: FormData) {
   const jobId = str(fd, 'job_id');
   await c.sb.from('job_lines').update({ done: str(fd, 'done') === '1' })
     .eq('id', str(fd, 'line_id')).eq('garage_id', c.m.garage_id);
+  touch(jobId);
+}
+
+/** Add every line of a service-menu preset to the job */
+export async function addMenuToJob(fd: FormData) {
+  const c = await ctx();
+  if (!c) return;
+  const { m, sb } = c;
+  const jobId = str(fd, 'job_id');
+  if (!(await ownJob(sb, m.garage_id, jobId)) || (await invoiced(sb, jobId))) return;
+  const { data: item } = await sb.from('service_menu').select('lines').eq('id', str(fd, 'menu_id')).eq('garage_id', m.garage_id).maybeSingle();
+  const preset = (item?.lines ?? []) as { type: string; description: string; quantity: number; unit_price_pence: number; no_vat?: boolean }[];
+  if (!preset.length) return;
+  const { count } = await sb.from('job_lines').select('id', { count: 'exact', head: true }).eq('job_id', jobId);
+  await sb.from('job_lines').insert(preset.map((l, i) => ({
+    garage_id: m.garage_id, job_id: jobId, type: l.type, description: l.description, quantity: l.quantity,
+    unit_price_pence: l.unit_price_pence, no_vat: !!l.no_vat, sort_order: (count ?? 0) + i + 1,
+  })));
   touch(jobId);
 }
 
@@ -424,6 +492,39 @@ export async function deletePhoto(fd: FormData) {
   touch(p.job_id);
 }
 
+/* ---------------- Customer signatures ---------------- */
+
+export async function saveSignature(_: ActionState, fd: FormData): Promise<ActionState> {
+  const c = await ctx();
+  if (!c) return oops('You are signed out');
+  const { m, sb } = c;
+  const jobId = str(fd, 'job_id');
+  const kind = str(fd, 'kind');
+  const name = str(fd, 'signer_name');
+  const png = str(fd, 'png');
+  if (!(await ownJob(sb, m.garage_id, jobId))) return oops('Job not found');
+  if (!['check_in', 'collection'].includes(kind)) return oops('Unknown signature');
+  const errors: Record<string, string> = {};
+  if (!name || name.length > 100) errors.signer_name = 'Enter the name of the person signing';
+  const match = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(png);
+  const bytes = match ? Buffer.from(match[1], 'base64') : null;
+  if (!bytes || bytes.length < 200) errors.png = 'Please sign in the box';
+  else if (bytes.length > 600_000) errors.png = 'That signature is too large. Clear it and try again.';
+  if (Object.keys(errors).length) return fail(errors);
+
+  const { data: g } = await sb.from('garages').select('authorisation_text').eq('id', m.garage_id).single();
+  const statement = kind === 'check_in'
+    ? (g?.authorisation_text?.trim() || DEFAULT_AUTHORISATION)
+    : 'I have collected the vehicle and been told about the work carried out.';
+  const path = `${m.garage_id}/${jobId}/signature-${kind}-${crypto.randomUUID()}.png`;
+  const { error: upErr } = await sb.storage.from('job-photos').upload(path, bytes!, { contentType: 'image/png' });
+  if (upErr) return oops(`Could not save the signature: ${upErr.message}`);
+  const { error } = await sb.from('job_signatures').insert({ garage_id: m.garage_id, job_id: jobId, kind, signer_name: name, statement, path });
+  if (error) return oops(error.message);
+  touch(jobId);
+  return done('Signature saved');
+}
+
 /* ---------------- Delete ---------------- */
 
 export async function deleteJob(fd: FormData) {
@@ -431,6 +532,8 @@ export async function deleteJob(fd: FormData) {
   if (!c || c.m.role === 'mechanic') return;
   const { m, sb } = c;
   const id = str(fd, 'id');
+  const { count: held } = await sb.from('payments').select('id', { count: 'exact', head: true }).eq('job_id', id).is('invoice_id', null);
+  if (held) return; // a deposit is held against this job
   const { data: photos } = await sb.from('job_photos').select('path').eq('job_id', id).eq('garage_id', m.garage_id);
   if (photos?.length) await sb.storage.from('job-photos').remove(photos.map((p) => p.path));
   await sb.from('jobs').delete().eq('id', id).eq('garage_id', m.garage_id);

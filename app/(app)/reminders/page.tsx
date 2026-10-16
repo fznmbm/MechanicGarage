@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { BellRing, BellOff, ShieldCheck, Wrench, Lightbulb } from 'lucide-react';
+import { BellRing, BellOff, ShieldCheck, Wrench, Lightbulb, ThumbsDown } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { PageHeader } from '@/components/page-header';
@@ -15,6 +15,7 @@ import { reminderMessage, type ReminderKind } from '@/lib/reminders';
 import type { MotTest } from '@/lib/vehicle-lookup';
 import { cn } from '@/lib/utils';
 import { ReminderButtons } from './reminder-buttons';
+import { DeclinedWork } from './declined';
 
 export const metadata = { title: 'Reminders' };
 
@@ -35,6 +36,7 @@ export default async function RemindersPage({ searchParams }: { searchParams: Pr
   if (m.role === 'mechanic') redirect('/');
   const { tab } = await searchParams;
   const kind: ReminderKind = tab === 'service' || tab === 'advisory' ? tab : 'mot';
+  const declined = tab === 'declined';
   const today = ukToday();
   const from = addDays(today, -30);
   const to = addDays(today, 60);
@@ -68,14 +70,16 @@ export default async function RemindersPage({ searchParams }: { searchParams: Pr
       <PageHeader title="Reminders" description="Customers to contact. Tapping WhatsApp or Call records that you’ve reminded them." />
 
       <div className="flex flex-wrap gap-1.5">
-        {TABS.map((t) => (
+        {[...TABS, { key: 'declined', label: 'Declined work', icon: ThumbsDown }].map((t) => (
           <Link key={t.key} href={`/reminders?tab=${t.key}`}
             className={cn('flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium',
-              kind === t.key ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-accent')}>
+              (declined ? t.key === 'declined' : kind === t.key) ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-accent')}>
             <t.icon className="size-4" /> {t.label}
           </Link>
         ))}
       </div>
+
+      {declined ? <DeclinedWork garageId={m.garage_id} garageName={garage?.name ?? ''} bookUrl={bookUrl} /> : (
 
       <Card className="gap-0 py-0">
         {rows.length ? (
@@ -123,6 +127,7 @@ export default async function RemindersPage({ searchParams }: { searchParams: Pr
           </div>
         )}
       </Card>
+      )}
     </div>
   );
 }

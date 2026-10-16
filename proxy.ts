@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
 const ROOT = process.env.NEXT_PUBLIC_ROOT_DOMAIN!;
-const PUBLIC_PATHS = ['/login', '/book', '/auth', '/i/', '/join/', '/a/', '/u/', '/api/'];
+const PUBLIC_PATHS = ['/login', '/book', '/auth', '/i/', '/c/', '/f/', '/join/', '/a/', '/u/', '/api/'];
 
 function resolveTenant(req: NextRequest): { slug?: string; host?: string; fromQuery?: boolean } {
   const host = (req.headers.get('host') ?? '').toLowerCase();

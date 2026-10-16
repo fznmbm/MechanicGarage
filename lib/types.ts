@@ -35,7 +35,18 @@ export type Garage = {
   stripe_customer_id: string | null;
   custom_domain: string | null;
   closing_time: string;
+  credit_prefix?: string;
+  notify_booking_email?: boolean;
+  notify_ready_email?: boolean;
+  feature_courtesy_cars?: boolean;
+  feature_feedback?: boolean;
+  feedback_auto_email?: boolean;
+  google_review_url?: string | null;
+  authorisation_text?: string | null;
 };
+
+export type MenuLine = { type: 'labour' | 'part' | 'fee'; description: string; quantity: number; unit_price_pence: number; no_vat?: boolean };
+export type MenuItem = { id: string; name: string; lines: MenuLine[]; active: boolean; sort_order: number };
 
 export type Bay = { id: string; name: string; sort_order: number | null };
 

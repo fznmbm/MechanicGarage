@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from '@/lib/brand';
 import { CheckCircle2, AlertTriangle, CreditCard, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -31,7 +32,7 @@ export function PlanTab({ g, state, stripeOn, flash }: { g: Garage; state: PlanS
           {FEATURES.map((f) => <li key={f} className="flex items-start gap-2"><CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" />{f}</li>)}
         </ul>
         {!stripeOn ? (
-          <Alert><Info /><AlertDescription>Online billing isn’t switched on yet. Your plan is managed by RampDesk support.</AlertDescription></Alert>
+          <Alert><Info /><AlertDescription>Online billing isn’t switched on yet. Your plan is managed by {PRODUCT_NAME} support.</AlertDescription></Alert>
         ) : g.plan_status === 'comped' ? null : g.stripe_customer_id && g.plan_status !== 'cancelled' ? (
           <form suppressHydrationWarning action={openBillingPortal}><Button type="submit" variant="outline"><CreditCard /> Manage billing, card and invoices</Button></form>
         ) : (

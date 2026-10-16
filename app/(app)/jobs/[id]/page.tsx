@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
   ChevronLeft, Trash2, Phone, MessageCircle, Timer, Square, Play, Lightbulb, Plus, Camera, ClipboardList,
-  Wrench, CalendarDays, Check, Receipt, ClipboardCheck, ThumbsUp, ExternalLink,
+  Wrench, CalendarDays, Check, Receipt, ClipboardCheck, ThumbsUp, ExternalLink, Printer, PenLine, CarFront, Star,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -23,8 +23,11 @@ import { prettyReg } from '@/lib/reg';
 import { cn } from '@/lib/utils';
 import type { MotTest } from '@/lib/vehicle-lookup';
 import { diaryOptions } from '../../diary/data';
-import { addAdvisoryLine, clockOff, clockOn, deleteJob, markApprovalSent, setJobStatus } from '../actions';
+import { addAdvisoryLine, clockOff, clockOn, deleteJob, markApprovalSent, markFeedbackSent, setJobStatus } from '../actions';
 import { siteOrigin } from '@/lib/url';
+import { PAY_METHODS, balance, isOpenInvoice } from '@/lib/invoice';
+import { removeDeposit } from '../../invoices/actions';
+import { DepositForm } from '../../invoices/[id]/invoice-actions';
 import { HealthCheck, type Check as HealthItem } from './health-check';
 import { CopyAndMark, SendLink } from './approval-buttons';
 import { LinesEditor, type JobLine } from './lines-editor';
@@ -32,6 +35,9 @@ import { NotesForm } from './notes-form';
 import { DetailsForm } from './details-form';
 import { Photos, type JobPhoto } from './photos';
 import { IssueInvoiceForm } from './issue-invoice';
+import { Signatures, type SignatureRow } from './signatures';
+import { LendForm, ReturnForm, type CarOption } from '../../courtesy-cars/forms';
+import { DEFAULT_AUTHORISATION } from '@/lib/jobs';
 
 export const metadata = { title: 'Job card' };
 
@@ -75,11 +81,39 @@ export default async function JobPage({
     sb.from('job_lines').select('id, type, description, quantity, unit_price_pence, cost_pence, part_number, done, no_vat, approval, part_id').eq('job_id', id).order('sort_order'),
     sb.from('job_photos').select('id, path, caption').eq('job_id', id).order('created_at'),
     sb.from('time_entries').select('id, user_id, started_at, ended_at').eq('job_id', id).order('started_at'),
-    sb.from('garages').select('name, phone, labour_rate_pence, vat_registered, vat_effective_from, default_vat_rate, payment_terms_days').eq('id', m.garage_id).single(),
+    sb.from('garages').select('name, phone, labour_rate_pence, vat_registered, vat_effective_from, default_vat_rate, payment_terms_days, authorisation_text, feature_courtesy_cars, feature_feedback').eq('id', m.garage_id).single(),
     diaryOptions(m.garage_id),
     sb.from('garage_members').select('user_id, display_name').eq('garage_id', m.garage_id),
   ]);
-  const { data: checkRows } = await sb.from('job_checks').select('id, category, item, status, note').eq('job_id', id).order('sort_order');
+  const [{ data: checkRows }, { data: menu }, { data: sigRows }] = await Promise.all([
+    sb.from('job_checks').select('id, category, item, status, note').eq('job_id', id).order('sort_order'),
+    sb.from('service_menu').select('id, name').eq('garage_id', m.garage_id).eq('active', true).order('sort_order'),
+    sb.from('job_signatures').select('id, kind, signer_name, signed_at, statement, path').eq('job_id', id).order('signed_at'),
+  ]);
+  const sigUrls = sigRows?.length
+    ? (await sb.storage.from('job-photos').createSignedUrls(sigRows.map((x) => x.path), 3600)).data ?? []
+    : [];
+  const signatures: SignatureRow[] = (sigRows ?? []).map((x, i) => ({
+    id: x.id, kind: x.kind as SignatureRow['kind'], signer_name: x.signer_name, signed_at: x.signed_at, statement: x.statement, url: sigUrls[i]?.signedUrl ?? null,
+  }));
+
+  // optional features
+  type Loan = { id: string; out_at: string; due_back_at: string | null; mileage_out: number | null; fuel_out: string | null; car: { registration: string; description: string | null } | null };
+  const carsOn = !!garage?.feature_courtesy_cars;
+  const [{ data: loanRows }, { data: carRows }, { data: openLoans }, { data: feedback }] = await Promise.all([
+    carsOn ? sb.from('courtesy_loans').select('id, out_at, due_back_at, mileage_out, fuel_out, car:courtesy_cars(registration, description)').eq('job_id', id).is('returned_at', null)
+      : Promise.resolve({ data: [] }),
+    carsOn ? sb.from('courtesy_cars').select('id, registration, description').eq('garage_id', m.garage_id).eq('active', true).order('registration')
+      : Promise.resolve({ data: [] }),
+    carsOn ? sb.from('courtesy_loans').select('car_id').eq('garage_id', m.garage_id).is('returned_at', null) : Promise.resolve({ data: [] }),
+    garage?.feature_feedback && m.role !== 'mechanic'
+      ? sb.from('job_feedback').select('token, sent_at, score, comment, responded_at').eq('job_id', id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  const loan = ((loanRows ?? []) as unknown as Loan[])[0] ?? null;
+  const busy = new Set(((openLoans ?? []) as { car_id: string }[]).map((x) => x.car_id));
+  const freeCars = ((carRows ?? []) as CarOption[]).filter((c) => !busy.has(c.id));
+  const fb = feedback as { token: string; sent_at: string | null; score: number | null; comment: string | null; responded_at: string | null } | null;
 
   const names = new Map((members ?? []).map((x) => [x.user_id as string, x.display_name as string]));
   const signed = photoRows?.length
@@ -92,13 +126,19 @@ export default async function JobPage({
   const vatRate = garage ? vatRateOn(garage, ukToday()) : null;
   const t = totals(billable(ls), vatRate);
 
-  const [{ data: invoiced }, { data: invoices }] = await Promise.all([
+  type InvoiceMini = { id: string; number: string; status: 'draft' | 'issued' | 'part_paid' | 'paid' | 'void'; total_pence: number; paid_pence: number; credited_pence: number; due_at: string | null };
+  const [{ data: invoiced }, { data: invoices }, { data: deposits }] = await Promise.all([
     sb.rpc('job_has_invoice', { p_job: id }),
     canPrice
-      ? sb.from('invoices').select('id, number, status, total_pence, paid_pence, due_at').eq('job_id', id).order('created_at', { ascending: false })
-      : Promise.resolve({ data: [] as { id: string; number: string; status: string; total_pence: number; paid_pence: number; due_at: string | null }[] }),
+      ? sb.from('invoices').select('id, number, status, total_pence, paid_pence, credited_pence, due_at').eq('job_id', id).order('created_at', { ascending: false })
+      : Promise.resolve({ data: [] as InvoiceMini[] }),
+    canPrice
+      ? sb.from('payments').select('id, amount_pence, method, paid_at').is('invoice_id', null)
+          .or(job.booking_id ? `job_id.eq.${id},booking_id.eq.${job.booking_id}` : `job_id.eq.${id}`).order('paid_at')
+      : Promise.resolve({ data: [] as { id: string; amount_pence: number; method: string; paid_at: string }[] }),
   ]);
-  const activeInvoice = (invoices ?? []).find((x) => x.status !== 'void') ?? null;
+  const activeInvoice = ((invoices ?? []) as InvoiceMini[]).find((x) => isOpenInvoice(x)) ?? null;
+  const pastInvoices = ((invoices ?? []) as InvoiceMini[]).filter((x) => !isOpenInvoice(x));
   const locked = job.status === 'collected' || !!invoiced;
 
   // time clock
@@ -148,9 +188,14 @@ export default async function JobPage({
             )}
           </span>
         }
-        actions={next && (
-          <StatusForm id={job.id} status={next.status} variant="default"><Check /> {next.label}</StatusForm>
-        )}
+        actions={
+          <>
+            <Button variant="outline" asChild>
+              <a href={`/jobs/${job.id}/sheet`} target="_blank" rel="noreferrer"><Printer /> Job sheet</a>
+            </Button>
+            {next && <StatusForm id={job.id} status={next.status} variant="default"><Check /> {next.label}</StatusForm>}
+          </>
+        }
       >
         <Link href="/jobs" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
           <ChevronLeft className="size-4" /> Job cards
@@ -196,7 +241,7 @@ export default async function JobPage({
             </CardHeader>
             <CardContent>
               <LinesEditor jobId={job.id} lines={ls} canPrice={canPrice} labourRate={garage?.labour_rate_pence ?? 0}
-                vatRate={vatRate} locked={locked} />
+                vatRate={vatRate} locked={locked} menu={menu ?? []} />
             </CardContent>
           </Card>
 
@@ -255,7 +300,7 @@ export default async function JobPage({
                 {activeInvoice && (
                   <CardDescription>
                     {activeInvoice.number} · {gbp(activeInvoice.total_pence)}
-                    {activeInvoice.status === 'paid' ? ' · Paid' : ` · ${gbp(Math.max(0, activeInvoice.total_pence - activeInvoice.paid_pence))} to pay`}
+                    {balance(activeInvoice) === 0 ? ' · Paid' : ` · ${gbp(balance(activeInvoice))} to pay`}
                   </CardDescription>
                 )}
               </CardHeader>
@@ -268,9 +313,35 @@ export default async function JobPage({
                 ) : (
                   <p className="text-sm text-muted-foreground">Add work to the job, then create the invoice.</p>
                 )}
-                {(invoices ?? []).filter((x) => x.status === 'void').map((x) => (
-                  <Link key={x.id} href={`/invoices/${x.id}`} className="block text-xs text-muted-foreground line-through hover:text-foreground">
-                    {x.number} (void)
+                {!activeInvoice && (deposits ?? []).length > 0 && (
+                  <ul className="space-y-1 rounded-lg border px-3 py-2 text-sm">
+                    {(deposits ?? []).map((d) => (
+                      <li key={d.id} className="flex items-center justify-between gap-2">
+                        <span>Deposit · {PAY_METHODS[d.method] ?? d.method} · {ukDate(d.paid_at)}</span>
+                        <span className="flex items-center gap-1 tabular-nums">
+                          {gbp(d.amount_pence)}
+                          {m.role === 'owner' && (
+                            <form suppressHydrationWarning action={removeDeposit}>
+                              <input suppressHydrationWarning type="hidden" name="payment_id" value={d.id} />
+                              <ConfirmSubmit variant="ghost" size="icon" className="size-7 text-muted-foreground hover:text-destructive" aria-label="Remove deposit"
+                                message="Remove this deposit? Only do this if it was recorded by mistake or has been given back.">
+                                <Trash2 className="size-3.5" />
+                              </ConfirmSubmit>
+                            </form>
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                    <li className="text-xs text-muted-foreground">Moves onto the invoice when you create it.</li>
+                  </ul>
+                )}
+                {!activeInvoice && <DepositForm jobId={job.id} />}
+                <a href={`/jobs/${job.id}/sheet?prices=1`} target="_blank" rel="noreferrer" className="block text-xs text-muted-foreground underline-offset-2 hover:underline">
+                  Print job sheet with prices
+                </a>
+                {pastInvoices.map((x) => (
+                  <Link key={x.id} href={`/invoices/${x.id}`} className={cn('block text-xs text-muted-foreground hover:text-foreground', x.status === 'void' && 'line-through')}>
+                    {x.number} ({x.status === 'void' ? 'void' : 'credited'})
                   </Link>
                 ))}
               </CardContent>
@@ -344,6 +415,67 @@ export default async function JobPage({
             </CardContent>
           </Card>
 
+          {/* customer signatures */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><PenLine className="size-4" /> Customer signatures</CardTitle>
+              <CardDescription>Hand the tablet or phone to the customer. Signatures print on the job sheet.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Signatures jobId={job.id} rows={signatures} customerName={job.customer?.name ?? ''}
+                authorisation={garage?.authorisation_text?.trim() || DEFAULT_AUTHORISATION} />
+            </CardContent>
+          </Card>
+
+          {carsOn && (
+            <Card>
+              <CardHeader><CardTitle className="flex items-center gap-2"><CarFront className="size-4" /> Courtesy car</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                {loan ? (
+                  <>
+                    <div className="flex items-center gap-2 text-sm">
+                      <RegPlate reg={loan.car?.registration} />
+                      <span className="text-muted-foreground">{loan.car?.description}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Out {ukDate(loan.out_at)} {ukTime(loan.out_at)}
+                      {loan.due_back_at && ` · due back ${ukDate(loan.due_back_at)} ${ukTime(loan.due_back_at)}`}
+                      {loan.mileage_out != null && ` · ${loan.mileage_out.toLocaleString('en-GB')} mi`}{loan.fuel_out && ` · fuel ${loan.fuel_out}`}
+                    </p>
+                    {canPrice && <ReturnForm loanId={loan.id} />}
+                  </>
+                ) : canPrice ? <LendForm cars={freeCars} jobId={job.id} compact /> : <p className="text-sm text-muted-foreground">None lent.</p>}
+              </CardContent>
+            </Card>
+          )}
+
+          {fb && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Star className="size-4" /> Customer feedback</CardTitle>
+                <CardDescription>
+                  {fb.responded_at ? `Answered ${ukDate(fb.responded_at)}` : fb.sent_at ? `Link sent ${ukDate(fb.sent_at)}, no answer yet` : 'Not sent yet'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {fb.score != null && (
+                  <div>
+                    <div className="flex gap-0.5" aria-label={`${fb.score} out of 5`}>
+                      {[1, 2, 3, 4, 5].map((n) => <Star key={n} className={cn('size-5', n <= fb.score! ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/40')} />)}
+                    </div>
+                    {fb.comment && <p className="mt-2 text-sm">“{fb.comment}”</p>}
+                  </div>
+                )}
+                {!fb.responded_at && wa && (
+                  <form suppressHydrationWarning action={markFeedbackSent}>
+                    <input type="hidden" name="job_id" value={job.id} />
+                    <SendLink href={`${wa}?text=${encodeURIComponent(`Hi ${firstName}, thanks for choosing ${garage?.name ?? 'us'}. How did we do? It takes ten seconds: ${await siteOrigin()}/f/${fb.token}`)}`} label="Ask by WhatsApp" />
+                  </form>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* vehicle */}
           <Card>
             <CardHeader>
@@ -416,7 +548,7 @@ export default async function JobPage({
             </CardContent>
           </Card>
 
-          {m.role !== 'mechanic' && (
+          {m.role !== 'mechanic' && !(deposits ?? []).length && (
             <form suppressHydrationWarning action={deleteJob}>
               <input suppressHydrationWarning type="hidden" name="id" value={job.id} />
               <ConfirmSubmit variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 hover:text-destructive"

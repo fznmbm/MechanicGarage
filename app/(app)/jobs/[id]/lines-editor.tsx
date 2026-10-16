@@ -10,7 +10,7 @@ import { useActionToast } from '@/components/use-action-toast';
 import { gbp } from '@/lib/format';
 import { billable, lineTotal, totals } from '@/lib/money';
 import { cn } from '@/lib/utils';
-import { deleteLine, saveLine, searchParts, toggleLineDone, type PartHit } from '../actions';
+import { addMenuToJob, deleteLine, saveLine, searchParts, toggleLineDone, type PartHit } from '../actions';
 
 export type JobLine = {
   id: string; type: 'labour' | 'part' | 'fee'; description: string; quantity: number; unit_price_pence: number;
@@ -33,8 +33,8 @@ const APPROVAL = {
 const pounds = (p: number | null | undefined) => (p == null ? '' : (p / 100).toFixed(2));
 
 export function LinesEditor({
-  jobId, lines, canPrice, labourRate, vatRate, locked,
-}: { jobId: string; lines: JobLine[]; canPrice: boolean; labourRate: number; vatRate: number | null; locked: boolean }) {
+  jobId, lines, canPrice, labourRate, vatRate, locked, menu = [],
+}: { jobId: string; lines: JobLine[]; canPrice: boolean; labourRate: number; vatRate: number | null; locked: boolean; menu?: { id: string; name: string }[] }) {
   const { formAction, pending, err, state } = useActionToast(saveLine);
   const [editing, setEditing] = useState<JobLine | null>(null);
   const [type, setType] = useState<JobLine['type']>('labour');
@@ -246,7 +246,19 @@ export function LinesEditor({
           </div>
         </form>
       ) : (
-        <Button type="button" variant="outline" onClick={() => { resetForm(); setOpen(true); }}><Plus /> Add labour, part or fee</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" onClick={() => { resetForm(); setOpen(true); }}><Plus /> Add labour, part or fee</Button>
+          {menu.length > 0 && (
+            <form suppressHydrationWarning action={addMenuToJob} className="flex gap-2">
+              <input type="hidden" name="job_id" value={jobId} />
+              <NativeSelect name="menu_id" aria-label="Service menu" className="w-56" defaultValue="" required>
+                <option value="" disabled>From the service menu…</option>
+                {menu.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+              </NativeSelect>
+              <Button type="submit" variant="secondary">Add</Button>
+            </form>
+          )}
+        </div>
       ))}
 
       {/* totals */}

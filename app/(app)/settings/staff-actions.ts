@@ -1,5 +1,6 @@
 'use server';
 
+import { PRODUCT_NAME } from '@/lib/brand';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { getMembership } from '@/lib/tenant';
@@ -39,7 +40,7 @@ export async function createInvite(_: ActionState, fd: FormData): Promise<Action
     const link = `${await siteOrigin()}/join/${data.token}`;
     const res = await sendEmail({
       to: email, fromName: c.m.garage.name,
-      subject: `Join ${c.m.garage.name} on RampDesk`,
+      subject: `Join ${c.m.garage.name} on ${PRODUCT_NAME}`,
       text: `Hi ${name},\n\n${c.m.display_name} has invited you to join ${c.m.garage.name} as ${role}.\n\nSet up your login here (link valid for 14 days):\n${link}`,
       html: `<div style="font-family:Arial,sans-serif;font-size:14px;color:#1e293b;line-height:1.5"><p>Hi ${escapeHtml(name)},</p>
         <p>${escapeHtml(c.m.display_name)} has invited you to join <b>${escapeHtml(c.m.garage.name)}</b> as ${role}.</p>

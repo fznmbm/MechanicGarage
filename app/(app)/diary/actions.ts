@@ -1,5 +1,6 @@
 'use server';
 
+import { emailBookingConfirmation } from '@/lib/notify';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
@@ -180,6 +181,8 @@ export async function createBooking(_: ActionState, fd: FormData): Promise<Actio
     .select('id').single();
   if (error) return oops(error.message);
 
+  if (fd.get('send_confirmation') !== 'off') await confirmBooking(sb, m.garage_id, data.id);
+
   revalidatePath('/diary');
   revalidatePath('/');
   redirect(`/diary/${data.id}?created=1`);
@@ -214,6 +217,21 @@ export async function updateBooking(_: ActionState, fd: FormData): Promise<Actio
   redirect(`/diary/${id}?saved=1`);
 }
 
+/** Booking confirmation email, if the garage has it switched on */
+async function confirmBooking(sb: Awaited<ReturnType<typeof createClient>>, garageId: string, bookingId: string) {
+  const [{ data: g }, { data: b }] = await Promise.all([
+    sb.from('garages').select('name, phone, email, address, postcode, brand_colour, notify_booking_email').eq('id', garageId).single(),
+    sb.from('bookings').select('starts_at, service_type, customer:customers(name, email), vehicle:vehicles(registration)').eq('id', bookingId).single(),
+  ]);
+  if (!g?.notify_booking_email || !b) return;
+  const one = <T,>(v: T | T[] | null): T | null => (Array.isArray(v) ? v[0] ?? null : v);
+  const cust = one(b.customer as unknown as { name: string; email: string | null } | null);
+  await emailBookingConfirmation({
+    garage: g, to: cust?.email ?? null, name: cust?.name ?? null, startsAt: b.starts_at, service: b.service_type,
+    registration: one(b.vehicle as unknown as { registration: string } | null)?.registration ?? null,
+  });
+}
+
 /* ---------------- Status + delete ---------------- */
 
 export async function setBookingStatus(fd: FormData) {
@@ -234,6 +252,9 @@ export async function deleteBooking(fd: FormData) {
   if (!m || m.role === 'mechanic') return;
   const sb = await createClient();
   const date = str(fd, 'date');
+  // money taken against it stays on record: remove the deposit first
+  const { count } = await sb.from('payments').select('id', { count: 'exact', head: true }).eq('booking_id', str(fd, 'id')).is('invoice_id', null);
+  if (count) return;
   await sb.from('bookings').delete().eq('id', str(fd, 'id')).eq('garage_id', m.garage_id);
   revalidatePath('/diary');
   revalidatePath('/');

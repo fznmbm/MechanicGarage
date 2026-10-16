@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { ChevronLeft, Download, FileText, MessageCircle, Mail, Wrench, Trash2, Info, ExternalLink } from 'lucide-react';
+import { ChevronLeft, Download, FileText, MessageCircle, Mail, Wrench, Trash2, Info, ExternalLink, FileMinus2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -10,14 +10,14 @@ import { FlashToast } from '@/components/flash-toast';
 import { InvoiceDocument } from '@/components/invoice-document';
 import { getMembership } from '@/lib/tenant';
 import { gbp, ukDate, whatsappLink } from '@/lib/format';
-import { PAY_METHODS, STATUS_STYLE, balance, displayStatus } from '@/lib/invoice';
+import { PAY_METHODS, STATUS_STYLE, balance, displayStatus, fullyCredited, overpaid } from '@/lib/invoice';
 import { emailConfigured } from '@/lib/email';
 import { siteOrigin } from '@/lib/url';
 import { ukToday } from '@/lib/time';
 import { jobNo } from '@/lib/jobs';
 import { loadInvoice } from '../data';
 import { deletePayment } from '../actions';
-import { CopyLink, EmailForm, PaymentForm, VoidForm } from './invoice-actions';
+import { CopyLink, CreditNoteForm, EmailForm, PaymentForm, RefundForm, VoidForm } from './invoice-actions';
 
 export const metadata = { title: 'Invoice' };
 
@@ -43,6 +43,11 @@ export default async function InvoicePage({
   const mailto = `mailto:${i.buyer.email ?? ''}?subject=${encodeURIComponent(`Invoice ${i.number} from ${i.seller.name}`)}` +
     `&body=${encodeURIComponent(`Hi ${first},\n\nYou can view and download invoice ${i.number} here:\n${link}\n\nThanks,\n${i.seller.name}`)}`;
   const isVoid = i.status === 'void';
+  const credited = i.credited_pence ?? 0;
+  const owedBack = overpaid(i);
+  const credits = doc.credits ?? [];
+  const creditedQty = doc.credited_lines ?? {};
+  const canVoid = credits.length === 0 && doc.payments.every((p) => p.deposit);
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -88,9 +93,10 @@ export default async function InvoicePage({
           {!isVoid && (
             <Card>
               <CardHeader>
-                <CardTitle>{owed > 0 ? `${gbp(owed)} to pay` : 'Paid in full'}</CardTitle>
+                <CardTitle>{owedBack > 0 ? `${gbp(owedBack)} to refund` : owed > 0 ? `${gbp(owed)} to pay` : fullyCredited(i) ? 'Credited in full' : 'Paid in full'}</CardTitle>
                 <CardDescription>
-                  {i.paid_pence > 0 ? `${gbp(i.paid_pence)} of ${gbp(i.total_pence)} received` : 'No payments yet'}
+                  {i.paid_pence !== 0 ? `${gbp(i.paid_pence)} of ${gbp(i.total_pence)} received` : 'No payments yet'}
+                  {credited > 0 && ` · ${gbp(credited)} credited`}
                   {owed > 0 && i.due_at && ` · due ${i.due_at === i.issued_at ? 'on receipt' : ukDate(i.due_at)}`}
                 </CardDescription>
               </CardHeader>
@@ -100,7 +106,10 @@ export default async function InvoicePage({
                     {doc.payments.map((p) => (
                       <li key={p.id} className="flex items-center gap-2 px-3 py-2">
                         <div className="flex-1">
-                          <div className="font-medium">{gbp(p.amount_pence)} · {PAY_METHODS[p.method] ?? p.method}</div>
+                          <div className="font-medium">
+                            {p.amount_pence < 0 ? `Refund ${gbp(-p.amount_pence)}` : gbp(p.amount_pence)} · {PAY_METHODS[p.method] ?? p.method}
+                            {p.deposit && <Badge variant="secondary" className="ml-2">Deposit</Badge>}
+                          </div>
                           <div className="text-xs text-muted-foreground">{ukDate(p.paid_at)}{p.reference ? ` · ${p.reference}` : ''}</div>
                         </div>
                         {m.role === 'owner' && (
@@ -117,6 +126,9 @@ export default async function InvoicePage({
                   </ul>
                 )}
                 {owed > 0 && <PaymentForm invoiceId={i.id} owed={owed} today={today} />}
+                {owedBack > 0 && (m.role === 'owner'
+                  ? <RefundForm invoiceId={i.id} amount={owedBack} />
+                  : <p className="text-sm text-muted-foreground">The customer has overpaid. Ask the owner to record the refund.</p>)}
               </CardContent>
             </Card>
           )}
@@ -144,14 +156,48 @@ export default async function InvoicePage({
             </CardContent>
           </Card>
 
+          {!isVoid && (credits.length > 0 || m.role === 'owner') && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><FileMinus2 className="size-4" /> Credit notes</CardTitle>
+                <CardDescription>To refund or correct an issued invoice. The invoice itself never changes.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {credits.length > 0 && (
+                  <ul className="divide-y rounded-lg border text-sm">
+                    {credits.map((c) => (
+                      <li key={c.id}>
+                        <Link href={`/invoices/credit/${c.id}`} className="flex items-center justify-between gap-2 px-3 py-2 hover:bg-accent">
+                          <div className="min-w-0">
+                            <div className="font-mono font-medium">{c.number}</div>
+                            <div className="truncate text-xs text-muted-foreground">{ukDate(c.issued_at)} · {c.reason}</div>
+                          </div>
+                          <span className="tabular-nums">−{gbp(c.total_pence)}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {m.role === 'owner' && credited < i.total_pence && (
+                  <CreditNoteForm invoiceId={i.id} today={today} vat={i.is_vat_invoice} paid={i.paid_pence}
+                    left={i.total_pence - credited} nothingCreditedYet={credited === 0}
+                    lines={doc.lines.map((l) => ({
+                      id: l.id, description: l.description, type: l.type, quantity: Number(l.quantity), unit_price_pence: l.unit_price_pence,
+                      left: Math.round((Number(l.quantity) - Number(creditedQty[l.id] ?? 0)) * 100) / 100,
+                    }))} />
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {i.job_id && (
             <Button variant="outline" className="w-full" asChild>
               <Link href={`/jobs/${i.job_id}`}><Wrench /> Open job {i.vehicle.job_number ? jobNo(i.vehicle.job_number) : ''}</Link>
             </Button>
           )}
 
-          {!isVoid && m.role === 'owner' && (i.paid_pence === 0 ? <VoidForm invoiceId={i.id} /> : (
-            <p className="text-xs text-muted-foreground">To void this invoice, remove its payments first.</p>
+          {!isVoid && m.role === 'owner' && (canVoid ? <VoidForm invoiceId={i.id} /> : credits.length === 0 && (
+            <p className="text-xs text-muted-foreground">To void this invoice, remove its payments first, or issue a credit note instead.</p>
           ))}
         </div>
       </div>

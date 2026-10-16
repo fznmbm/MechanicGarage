@@ -41,7 +41,7 @@ export default async function CustomerPage({
   const vs = (vehicles ?? []) as Vehicle[];
   const seesMoney = m.role !== 'mechanic';
   const { data: invs } = seesMoney
-    ? await sb.from('invoices').select('id, number, issued_at, due_at, total_pence, paid_pence, status')
+    ? await sb.from('invoices').select('id, number, issued_at, due_at, total_pence, paid_pence, credited_pence, status')
         .eq('customer_id', id).eq('garage_id', m.garage_id).order('issued_at', { ascending: false }).limit(10)
     : { data: [] as never[] };
   const today = ukToday();

@@ -1,8 +1,10 @@
 'use client';
+import { PRODUCT_NAME } from '@/lib/brand';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, CalendarDays, Wrench, Users, Car, Receipt, Settings, LogOut, ChevronsUpDown, BellRing, Boxes, BarChart3, ShieldCheck,
+  MonitorSmartphone, CarFront,
 } from 'lucide-react';
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader,
@@ -16,13 +18,16 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { GarageLogo } from '@/components/garage-logo';
 
 type Role = 'owner' | 'reception' | 'mechanic';
-type Item = { href: string; label: string; icon: React.ElementType; roles?: Role[] };
+type Feature = 'courtesy';
+type Item = { href: string; label: string; icon: React.ElementType; roles?: Role[]; feature?: Feature };
 
 const GROUPS: { label: string; items: Item[] }[] = [
   { label: 'Workshop', items: [
     { href: '/', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/diary', label: 'Diary', icon: CalendarDays },
     { href: '/jobs', label: 'Job cards', icon: Wrench },
+    { href: '/workshop', label: 'Workshop board', icon: MonitorSmartphone },
+    { href: '/courtesy-cars', label: 'Courtesy cars', icon: CarFront, feature: 'courtesy' },
     { href: '/reminders', label: 'Reminders', icon: BellRing, roles: ['owner', 'reception'] },
   ]},
   { label: 'Records', items: [
@@ -38,8 +43,9 @@ const GROUPS: { label: string; items: Item[] }[] = [
 ];
 
 export function AppSidebar({
-  garage, user, signOut, isAdmin = false,
+  garage, user, signOut, isAdmin = false, features = [],
 }: {
+  features?: Feature[];
   garage: { name: string; logo_url: string | null };
   user: { name: string; email: string; role: Role };
   signOut: () => Promise<void>;
@@ -59,7 +65,7 @@ export function AppSidebar({
                 <GarageLogo name={garage.name} logoUrl={garage.logo_url} />
                 <div className="grid flex-1 text-left leading-tight">
                   <span className="truncate font-semibold">{garage.name}</span>
-                  <span className="truncate text-xs opacity-60">RampDesk</span>
+                  <span className="truncate text-xs opacity-60">{PRODUCT_NAME}</span>
                 </div>
               </Link>
             </SidebarMenuButton>
@@ -69,7 +75,7 @@ export function AppSidebar({
 
       <SidebarContent>
         {GROUPS.map((group) => {
-          const items = group.items.filter((i) => !i.roles || i.roles.includes(user.role));
+          const items = group.items.filter((i) => (!i.roles || i.roles.includes(user.role)) && (!i.feature || features.includes(i.feature)));
           if (!items.length) return null;
           return (
             <SidebarGroup key={group.label}>

@@ -14,7 +14,9 @@ import { ConfirmSubmit } from '@/components/confirm-submit';
 import { FlashToast } from '@/components/flash-toast';
 import { createClient } from '@/lib/supabase/server';
 import { getMembership } from '@/lib/tenant';
-import { initials, ukDate, whatsappLink } from '@/lib/format';
+import { gbp, initials, ukDate, whatsappLink } from '@/lib/format';
+import { PAY_METHODS } from '@/lib/invoice';
+import { DepositForm } from '../../invoices/[id]/invoice-actions';
 import { ukDateOf, ukLongDate, ukTime } from '@/lib/time';
 import { durationLabel } from '@/lib/services';
 import { prettyReg } from '@/lib/reg';
@@ -58,12 +60,15 @@ export default async function BookingPage({
     .eq('id', id).eq('garage_id', m.garage_id).maybeSingle();
   if (!b) notFound();
 
-  const [{ data: mech }, { data: garage }, { data: job }] = await Promise.all([
+  const [{ data: mech }, { data: garage }, { data: job }, { data: deposits }] = await Promise.all([
     b.mechanic_id
       ? sb.from('garage_members').select('display_name').eq('garage_id', m.garage_id).eq('user_id', b.mechanic_id).maybeSingle()
       : Promise.resolve({ data: null }),
     sb.from('garages').select('name, phone').eq('id', m.garage_id).single(),
     sb.from('jobs').select('id, job_number').eq('booking_id', id).eq('garage_id', m.garage_id).maybeSingle(),
+    m.role !== 'mechanic'
+      ? sb.from('payments').select('id, amount_pence, method, paid_at, invoice_id').eq('booking_id', id).eq('garage_id', m.garage_id).order('paid_at')
+      : Promise.resolve({ data: [] as { id: string; amount_pence: number; method: string; paid_at: string; invoice_id: string | null }[] }),
   ]);
 
   const date = ukDateOf(b.starts_at);
@@ -201,6 +206,28 @@ export default async function BookingPage({
           </Card>
 
           {m.role !== 'mechanic' && (
+            <Card>
+              <CardHeader><CardTitle>Deposit</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                {(deposits ?? []).length > 0 ? (
+                  <ul className="space-y-1 text-sm">
+                    {(deposits ?? []).map((d) => (
+                      <li key={d.id} className="flex justify-between gap-2">
+                        <span>{PAY_METHODS[d.method] ?? d.method} · {ukDate(d.paid_at)}{d.invoice_id ? ' · on invoice' : ''}</span>
+                        <span className="tabular-nums">{gbp(d.amount_pence)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : <p className="text-sm text-muted-foreground">No deposit taken. It moves onto the invoice automatically.</p>}
+                {active && <DepositForm bookingId={b.id} />}
+              </CardContent>
+            </Card>
+          )}
+
+          {m.role !== 'mechanic' && (deposits ?? []).some((d) => !d.invoice_id) && (
+            <p className="text-xs text-muted-foreground">This booking has a deposit, so it can’t be deleted. Cancel it instead.</p>
+          )}
+          {m.role !== 'mechanic' && !(deposits ?? []).some((d) => !d.invoice_id) && (
             <form suppressHydrationWarning action={deleteBooking}>
               <input suppressHydrationWarning type="hidden" name="id" value={b.id} />
               <input suppressHydrationWarning type="hidden" name="date" value={date} />

@@ -7,7 +7,7 @@ Next.js 16 · Tailwind 4 · shadcn/ui (Radix) · Supabase · Vercel
 
 1. `npm install`
 2. Copy `.env.example` to `.env.local` and fill in your Supabase URL and publishable (anon) key.
-3. In Supabase → SQL editor, run every file in `supabase/` in number order (01 to 13).
+3. In Supabase → SQL editor, run every file in `supabase/` in number order (01 to 15).
    Each is run once; skip any you have already run.
 4. Supabase → Authentication → Providers → Email: turn off "Confirm email" for development.
 5. `npm run dev` and open http://localhost:3000 → "Create an account" → set up your garage.
@@ -65,6 +65,31 @@ Needs three things on the server (Vercel → Settings → Environment Variables)
 Each garage switches reminders on in Settings → Reminders. Only customers who agreed are emailed,
 and every email has an unsubscribe link. Without this setup, the Reminders page still gives
 one-tap WhatsApp reminders.
+
+## Credit notes, refunds and deposits
+
+- **Credit notes** (owner): on an invoice, credit the whole invoice, some items or an amount. Issued invoices never change.
+  Crediting the whole invoice unlocks the job so it can be corrected and invoiced again; money already paid moves to the new invoice.
+- **Refunds**: choose “Refund now” on the credit note, or record a refund on any overpaid invoice.
+- **Deposits**: take a deposit on a booking or job card; it moves onto the invoice automatically.
+
+## Workshop
+
+- **Job sheet**: “Job sheet” on a job card prints an A4 sheet for the workshop (no prices; “with prices” for staff), with signatures.
+- **Customer signatures**: authorisation at check-in and on collection, signed on a phone or tablet.
+- **Service menu** (Settings → Service menu): preset jobs with labour, parts and prices, added to a job in one tap.
+- **Workshop board**: big tiles for a tablet or wall screen, refreshes every 30 seconds.
+- **Declined work**: Reminders → Declined work lists work customers turned down, to offer again.
+
+## Optional features (Settings → Features)
+
+- Automatic booking-confirmation and ready-to-collect emails (need Resend set up)
+- Courtesy cars: loan cars, who has them, due back, mileage and fuel
+- Customer feedback: a 1–5 score after collection, then an invitation to review on Google
+
+## Product name
+
+Set `NEXT_PUBLIC_PRODUCT_NAME` to change the product name shown in the app, emails and “Powered by” lines.
 
 ## Importing customers
 

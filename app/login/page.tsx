@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from '@/lib/brand';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { CalendarCheck, Wrench, Receipt, BellRing } from 'lucide-react';
@@ -53,7 +54,7 @@ export default async function LoginPage({
   const tenant = await getTenant();
   // sign-up is for new garages, or staff arriving from an invite link
   const signingUp = mode === 'signup' && (!tenant || !!next);
-  const name = tenant?.name ?? 'RampDesk';
+  const name = tenant?.name ?? PRODUCT_NAME;
 
   return (
     <div className="grid min-h-svh lg:grid-cols-2">
@@ -127,7 +128,7 @@ export default async function LoginPage({
               </li>
             ))}
           </ul>
-          {tenant && <p className="text-xs opacity-70">Powered by RampDesk</p>}
+          {tenant && <p className="text-xs opacity-70">Powered by {PRODUCT_NAME}</p>}
         </div>
       </div>
     </div>

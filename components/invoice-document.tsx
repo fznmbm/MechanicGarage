@@ -1,6 +1,6 @@
 import { gbp, ukDate } from '@/lib/format';
 import { prettyReg } from '@/lib/reg';
-import { balance, brandOf, qty, vatSummary, type InvoiceDoc } from '@/lib/invoice';
+import { PAY_METHODS, balance, brandOf, fullyCredited, qty, vatSummary, type InvoiceDoc } from '@/lib/invoice';
 import { jobNo } from '@/lib/jobs';
 import { cn } from '@/lib/utils';
 
@@ -11,7 +11,9 @@ export function InvoiceDocument({ doc, className }: { doc: InvoiceDoc; className
   const b = i.buyer;
   const v = i.vehicle;
   const brand = brandOf(s);
-  const owed = balance(i);
+  const credit = doc.kind === 'credit';
+  const owed = credit ? 0 : balance(i);
+  const credited = i.credited_pence ?? 0;
   const vat = i.is_vat_invoice;
   const summary = vat ? vatSummary(lines) : [];
 
@@ -40,11 +42,12 @@ export function InvoiceDocument({ doc, className }: { doc: InvoiceDoc; className
           </div>
         </div>
         <div className="sm:text-right">
-          <div className="text-2xl font-bold tracking-tight" style={{ color: brand }}>{vat ? 'VAT INVOICE' : 'INVOICE'}</div>
+          <div className="text-2xl font-bold tracking-tight" style={{ color: brand }}>{credit ? (vat ? 'VAT CREDIT NOTE' : 'CREDIT NOTE') : vat ? 'VAT INVOICE' : 'INVOICE'}</div>
           <dl className="mt-2 grid grid-cols-[auto_auto] justify-start gap-x-4 gap-y-0.5 text-slate-600 sm:justify-end">
-            <dt>Invoice no.</dt><dd className="font-semibold text-slate-900">{i.number}</dd>
+            <dt>{credit ? 'Credit note no.' : 'Invoice no.'}</dt><dd className="font-semibold text-slate-900">{i.number}</dd>
             <dt>Date{vat ? ' / tax point' : ''}</dt><dd>{ukDate(i.issued_at)}</dd>
-            {i.due_at && <><dt>Due</dt><dd>{i.due_at === i.issued_at ? 'On receipt' : ukDate(i.due_at)}</dd></>}
+            {credit && doc.against && <><dt>Against invoice</dt><dd>{doc.against.number} of {ukDate(doc.against.issued_at)}</dd></>}
+            {!credit && i.due_at && <><dt>Due</dt><dd>{i.due_at === i.issued_at ? 'On receipt' : ukDate(i.due_at)}</dd></>}
             {vat && s.vat_number && <><dt>VAT reg. no.</dt><dd>{s.vat_number}</dd></>}
           </dl>
         </div>
@@ -53,7 +56,7 @@ export function InvoiceDocument({ doc, className }: { doc: InvoiceDoc; className
       {/* parties */}
       <section className="grid gap-6 py-6 sm:grid-cols-2">
         <div>
-          <div className="mb-1 text-xs font-semibold tracking-wide text-slate-500 uppercase">Bill to</div>
+          <div className="mb-1 text-xs font-semibold tracking-wide text-slate-500 uppercase">{credit ? 'Customer' : 'Bill to'}</div>
           <div className="font-semibold text-slate-900">{b.name ?? 'Customer'}</div>
           {b.address && <div className="whitespace-pre-line text-slate-600">{b.address}</div>}
           {b.postcode && <div className="text-slate-600">{b.postcode}</div>}
@@ -145,15 +148,25 @@ export function InvoiceDocument({ doc, className }: { doc: InvoiceDoc; className
           <div className="flex justify-between"><dt className="text-slate-600">{vat ? 'Subtotal (ex VAT)' : 'Subtotal'}</dt><dd className="tabular-nums">{gbp(i.subtotal_pence)}</dd></div>
           {vat && <div className="flex justify-between"><dt className="text-slate-600">VAT</dt><dd className="tabular-nums">{gbp(i.vat_pence)}</dd></div>}
           <div className="flex justify-between border-t-2 pt-1 text-base font-bold text-slate-900" style={{ borderColor: brand }}>
-            <dt>Total</dt><dd className="tabular-nums">{gbp(i.total_pence)}</dd>
+            <dt>{credit ? 'Total credited' : 'Total'}</dt><dd className="tabular-nums">{gbp(i.total_pence)}</dd>
           </div>
-          {i.paid_pence > 0 && i.status !== 'void' && (
+          {credit && doc.refund && doc.refund.amount_pence > 0 && (
+            <div className="flex justify-between text-slate-600">
+              <dt>Refunded{doc.refund.method ? ` by ${(PAY_METHODS[doc.refund.method] ?? doc.refund.method).toLowerCase()}` : ''}</dt>
+              <dd className="tabular-nums">{gbp(doc.refund.amount_pence)}</dd>
+            </div>
+          )}
+          {!credit && (i.paid_pence !== 0 || credited > 0) && i.status !== 'void' && (
             <>
-              <div className="flex justify-between text-slate-600"><dt>Paid</dt><dd className="tabular-nums">−{gbp(i.paid_pence)}</dd></div>
+              {i.paid_pence !== 0 && <div className="flex justify-between text-slate-600"><dt>Paid</dt><dd className="tabular-nums">−{gbp(i.paid_pence)}</dd></div>}
+              {credited > 0 && <div className="flex justify-between text-slate-600"><dt>Credit notes</dt><dd className="tabular-nums">−{gbp(credited)}</dd></div>}
               <div className="flex justify-between font-semibold text-slate-900"><dt>Balance due</dt><dd className="tabular-nums">{gbp(owed)}</dd></div>
             </>
           )}
-          {i.status === 'paid' && (
+          {!credit && fullyCredited(i) && i.status !== 'void' && (
+            <div className="mt-2 rounded-md bg-slate-100 px-3 py-1.5 text-center text-sm font-semibold text-slate-600">Cancelled by credit note</div>
+          )}
+          {!credit && !fullyCredited(i) && i.status === 'paid' && owed === 0 && (
             <div className="mt-2 rounded-md bg-emerald-50 px-3 py-1.5 text-center text-sm font-semibold text-emerald-700">
               Paid in full{payments.length ? ` · ${ukDate(payments[payments.length - 1].paid_at)}` : ''}
             </div>
@@ -163,7 +176,7 @@ export function InvoiceDocument({ doc, className }: { doc: InvoiceDoc; className
 
       {/* footer */}
       <footer className="mt-8 space-y-4 border-t pt-4 text-xs text-slate-600">
-        {i.notes && <p className="whitespace-pre-line text-sm text-slate-800">{i.notes}</p>}
+        {i.notes && <p className="whitespace-pre-line text-sm text-slate-800">{credit && <b>Reason: </b>}{i.notes}</p>}
         {owed > 0 && s.bank_details && (
           <div>
             <div className="mb-0.5 font-semibold text-slate-800">How to pay</div>
@@ -175,7 +188,7 @@ export function InvoiceDocument({ doc, className }: { doc: InvoiceDoc; className
           <p>Pay online: <a href={s.payment_link_url} className="font-medium underline" style={{ color: brand }}>{s.payment_link_url.replace(/^https?:\/\//, '')}</a></p>
         )}
         {s.terms && <p className="whitespace-pre-line">{s.terms}</p>}
-        <p className="text-center text-slate-400">Thank you for your business.</p>
+        {!credit && <p className="text-center text-slate-400">Thank you for your business.</p>}
       </footer>
     </article>
   );

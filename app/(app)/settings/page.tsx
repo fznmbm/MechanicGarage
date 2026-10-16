@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { Users, CalendarCheck, BellRing, CreditCard } from 'lucide-react';
+import { Users, CalendarCheck, BellRing, CreditCard, ToggleRight, ListChecks } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { getMembership } from '@/lib/tenant';
 import { emailConfigured } from '@/lib/email';
@@ -8,7 +8,9 @@ import { stripeConfigured } from '@/lib/stripe';
 import { garageLink } from '@/lib/garage-url';
 import { siteOrigin } from '@/lib/url';
 import { planState } from '@/lib/plan';
-import type { Bay, Garage } from '@/lib/types';
+import type { Bay, Garage, MenuItem } from '@/lib/types';
+import { FeaturesTab } from './features';
+import { ServiceMenuTab } from './service-menu';
 import { SettingsTabs, type ExtraTab } from './settings-tabs';
 import { StaffTab, type Invite, type Member } from './staff';
 import { BookingTab, type OnlineService } from './booking';
@@ -17,7 +19,7 @@ import { PlanTab } from './plan';
 
 export const metadata = { title: 'Settings' };
 
-const TABS = ['business', 'branding', 'workshop', 'invoicing', 'vat', 'staff', 'booking', 'reminders', 'plan'];
+const TABS = ['business', 'branding', 'workshop', 'invoicing', 'vat', 'staff', 'menu', 'booking', 'reminders', 'features', 'plan'];
 const nowMs = () => Date.now();
 
 export default async function SettingsPage({
@@ -27,7 +29,7 @@ export default async function SettingsPage({
   if (!m || m.role !== 'owner') redirect('/');
 
   const sb = await createClient();
-  const [{ data: garage }, { data: bays }, { data: members }, { data: invites }, { data: services }, { data: { user } }] = await Promise.all([
+  const [{ data: garage }, { data: bays }, { data: members }, { data: invites }, { data: services }, { data: { user } }, { data: menu }] = await Promise.all([
     sb.from('garages').select('*').eq('id', m.garage_id).single(),
     sb.from('bays').select('id, name, sort_order').eq('garage_id', m.garage_id).order('sort_order'),
     sb.from('garage_members').select('user_id, display_name, email, role, active').eq('garage_id', m.garage_id).order('created_at'),
@@ -35,6 +37,7 @@ export default async function SettingsPage({
       .gt('expires_at', new Date(nowMs()).toISOString()).order('created_at', { ascending: false }),
     sb.from('online_services').select('id, name, duration_minutes, price_from_pence, description').eq('garage_id', m.garage_id).order('sort_order'),
     sb.auth.getUser(),
+    sb.from('service_menu').select('id, name, lines, active, sort_order').eq('garage_id', m.garage_id).order('sort_order'),
   ]);
   if (!garage) redirect('/');
   const g = garage as Garage;
@@ -49,12 +52,20 @@ export default async function SettingsPage({
         origin={await siteOrigin()} garage={g.name} emailOn={emailConfigured()} />,
     },
     {
+      value: 'menu', label: 'Service menu', icon: <ListChecks />,
+      content: <ServiceMenuTab items={(menu ?? []) as MenuItem[]} labourRate={g.labour_rate_pence} />,
+    },
+    {
       value: 'booking', label: 'Online booking', icon: <CalendarCheck />,
       content: <BookingTab g={g} services={(services ?? []) as OnlineService[]} link={garageLink(g, '/book')} />,
     },
     {
       value: 'reminders', label: 'Reminders', icon: <BellRing />,
       content: <RemindersTab g={g} emailOn={emailConfigured()} cronOn={adminConfigured() && !!process.env.CRON_SECRET} />,
+    },
+    {
+      value: 'features', label: 'Features', icon: <ToggleRight />,
+      content: <FeaturesTab g={g} emailOn={emailConfigured()} />,
     },
     {
       value: 'plan', label: 'Plan', icon: <CreditCard />,
@@ -66,7 +77,7 @@ export default async function SettingsPage({
     <div className="mx-auto max-w-4xl space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground">Your garage, staff, online booking, reminders and plan.</p>
+        <p className="text-sm text-muted-foreground">Your garage, staff, service menu, online booking, reminders, features and plan.</p>
       </div>
       <SettingsTabs
         garage={g}

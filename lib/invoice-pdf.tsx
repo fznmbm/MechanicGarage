@@ -3,7 +3,7 @@ import { Document, Image, Page, StyleSheet, Text, View, renderToBuffer } from '@
 import { gbp, ukDate } from './format';
 import { prettyReg } from './reg';
 import { jobNo } from './jobs';
-import { balance, brandOf, qty, vatSummary, type InvoiceDoc } from './invoice';
+import { PAY_METHODS, balance, brandOf, fullyCredited, qty, vatSummary, type InvoiceDoc } from './invoice';
 
 const s = StyleSheet.create({
   page: { padding: 40, fontSize: 9.5, fontFamily: 'Helvetica', color: '#1e293b', lineHeight: 1.4 },
@@ -25,12 +25,15 @@ function InvoicePdf({ doc, logo }: { doc: InvoiceDoc; logo: string | null }) {
   const sel = i.seller, b = i.buyer, v = i.vehicle;
   const brand = brandOf(sel);
   const vat = i.is_vat_invoice;
-  const owed = balance(i);
+  const credit = doc.kind === 'credit';
+  const owed = credit ? 0 : balance(i);
+  const credited = i.credited_pence ?? 0;
+  const label = credit ? 'Credit note' : 'Invoice';
   const summary = vat ? vatSummary(lines) : [];
   const w = vat ? col : { ...col, desc: '62%' };
 
   return (
-    <Document title={`Invoice ${i.number}`} author={sel.name}>
+    <Document title={`${label} ${i.number}`} author={sel.name}>
       <Page size="A4" style={s.page}>
         {i.status === 'void' && (
           <Text fixed style={{ position: 'absolute', top: 330, left: 150, fontSize: 90, color: '#ef4444', opacity: 0.25, transform: 'rotate(-20deg)', fontFamily: 'Helvetica-Bold' }}>VOID</Text>
@@ -50,11 +53,12 @@ function InvoicePdf({ doc, logo }: { doc: InvoiceDoc; logo: string | null }) {
             </View>
           </View>
           <View style={{ alignItems: 'flex-end' }}>
-            <Text style={[s.h1, { color: brand }]}>{vat ? 'VAT INVOICE' : 'INVOICE'}</Text>
+            <Text style={[s.h1, { color: brand }]}>{credit ? (vat ? 'VAT CREDIT NOTE' : 'CREDIT NOTE') : vat ? 'VAT INVOICE' : 'INVOICE'}</Text>
             <View style={{ marginTop: 6, alignItems: 'flex-end' }}>
-              <Text><Text style={s.muted}>Invoice no.  </Text><Text style={s.bold}>{i.number}</Text></Text>
+              <Text><Text style={s.muted}>{label} no.  </Text><Text style={s.bold}>{i.number}</Text></Text>
               <Text><Text style={s.muted}>Date{vat ? ' / tax point' : ''}  </Text>{ukDate(i.issued_at)}</Text>
-              {i.due_at && <Text><Text style={s.muted}>Due  </Text>{i.due_at === i.issued_at ? 'On receipt' : ukDate(i.due_at)}</Text>}
+              {credit && doc.against && <Text><Text style={s.muted}>Against invoice  </Text>{doc.against.number} of {ukDate(doc.against.issued_at)}</Text>}
+              {!credit && i.due_at && <Text><Text style={s.muted}>Due  </Text>{i.due_at === i.issued_at ? 'On receipt' : ukDate(i.due_at)}</Text>}
               {vat && sel.vat_number && <Text><Text style={s.muted}>VAT reg. no.  </Text>{sel.vat_number}</Text>}
             </View>
           </View>
@@ -63,7 +67,7 @@ function InvoicePdf({ doc, logo }: { doc: InvoiceDoc; logo: string | null }) {
         {/* parties */}
         <View style={[s.between, { paddingVertical: 14 }]}>
           <View style={{ width: '50%' }}>
-            <Text style={s.label}>Bill to</Text>
+            <Text style={s.label}>{credit ? 'Customer' : 'Bill to'}</Text>
             <Text style={s.bold}>{b.name ?? 'Customer'}</Text>
             {b.address && <Text style={s.muted}>{b.address}</Text>}
             {b.postcode && <Text style={s.muted}>{b.postcode}</Text>}
@@ -121,15 +125,27 @@ function InvoicePdf({ doc, logo }: { doc: InvoiceDoc; logo: string | null }) {
             <View style={s.between}><Text style={s.muted}>{vat ? 'Subtotal (ex VAT)' : 'Subtotal'}</Text><Text>{gbp(i.subtotal_pence)}</Text></View>
             {vat && <View style={s.between}><Text style={s.muted}>VAT</Text><Text>{gbp(i.vat_pence)}</Text></View>}
             <View style={[s.between, { borderTopWidth: 2, borderTopColor: brand, marginTop: 3, paddingTop: 3 }]}>
-              <Text style={[s.bold, { fontSize: 12 }]}>Total</Text><Text style={[s.bold, { fontSize: 12 }]}>{gbp(i.total_pence)}</Text>
+              <Text style={[s.bold, { fontSize: 12 }]}>{credit ? 'Total credited' : 'Total'}</Text><Text style={[s.bold, { fontSize: 12 }]}>{gbp(i.total_pence)}</Text>
             </View>
-            {i.paid_pence > 0 && i.status !== 'void' && (
+            {credit && doc.refund && doc.refund.amount_pence > 0 && (
+              <View style={s.between}>
+                <Text style={s.muted}>Refunded{doc.refund.method ? ` by ${(PAY_METHODS[doc.refund.method] ?? doc.refund.method).toLowerCase()}` : ''}</Text>
+                <Text>{gbp(doc.refund.amount_pence)}</Text>
+              </View>
+            )}
+            {!credit && (i.paid_pence !== 0 || credited > 0) && i.status !== 'void' && (
               <>
-                <View style={s.between}><Text style={s.muted}>Paid</Text><Text>-{gbp(i.paid_pence)}</Text></View>
+                {i.paid_pence !== 0 && <View style={s.between}><Text style={s.muted}>Paid</Text><Text>-{gbp(i.paid_pence)}</Text></View>}
+                {credited > 0 && <View style={s.between}><Text style={s.muted}>Credit notes</Text><Text>-{gbp(credited)}</Text></View>}
                 <View style={s.between}><Text style={s.bold}>Balance due</Text><Text style={s.bold}>{gbp(owed)}</Text></View>
               </>
             )}
-            {i.status === 'paid' && (
+            {!credit && fullyCredited(i) && i.status !== 'void' && (
+              <Text style={{ marginTop: 6, backgroundColor: '#f1f5f9', color: '#475569', textAlign: 'center', paddingVertical: 4, fontFamily: 'Helvetica-Bold' }}>
+                CANCELLED BY CREDIT NOTE
+              </Text>
+            )}
+            {!credit && !fullyCredited(i) && i.status === 'paid' && owed === 0 && (
               <Text style={{ marginTop: 6, backgroundColor: '#ecfdf5', color: '#047857', textAlign: 'center', paddingVertical: 4, fontFamily: 'Helvetica-Bold' }}>
                 PAID IN FULL{payments.length ? ` · ${ukDate(payments[payments.length - 1].paid_at)}` : ''}
               </Text>
@@ -139,7 +155,7 @@ function InvoicePdf({ doc, logo }: { doc: InvoiceDoc; logo: string | null }) {
 
         {/* footer */}
         <View style={{ marginTop: 22, borderTopWidth: 1, borderTopColor: '#e2e8f0', paddingTop: 10 }} wrap={false}>
-          {i.notes && <Text style={{ marginBottom: 8 }}>{i.notes}</Text>}
+          {i.notes && <Text style={{ marginBottom: 8 }}>{credit ? <Text style={s.bold}>Reason: </Text> : null}{i.notes}</Text>}
           {owed > 0 && sel.bank_details && (
             <View style={{ marginBottom: 8 }}>
               <Text style={s.bold}>How to pay</Text>
@@ -152,14 +168,14 @@ function InvoicePdf({ doc, logo }: { doc: InvoiceDoc; logo: string | null }) {
         </View>
 
         <Text fixed style={{ position: 'absolute', bottom: 22, left: 40, right: 40, textAlign: 'center', fontSize: 7.5, color: '#94a3b8' }}
-          render={({ pageNumber, totalPages }) => `${sel.name} · Invoice ${i.number}${totalPages > 1 ? ` · Page ${pageNumber} of ${totalPages}` : ''}`} />
+          render={({ pageNumber, totalPages }) => `${sel.name} · ${label} ${i.number}${totalPages > 1 ? ` · Page ${pageNumber} of ${totalPages}` : ''}`} />
       </Page>
     </Document>
   );
 }
 
 /** Fetch the logo as a data URI (skipped if it fails, so the PDF always renders) */
-async function loadLogo(url: string | null): Promise<string | null> {
+export async function loadLogo(url: string | null): Promise<string | null> {
   if (!url) return null;
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
@@ -178,4 +194,4 @@ export async function renderInvoicePdf(doc: InvoiceDoc): Promise<Buffer> {
 }
 
 export const pdfFilename = (doc: InvoiceDoc) =>
-  `Invoice-${doc.invoice.number}${doc.invoice.vehicle.registration ? `-${doc.invoice.vehicle.registration}` : ''}.pdf`.replace(/[^\w.-]/g, '');
+  `${doc.kind === 'credit' ? 'CreditNote' : 'Invoice'}-${doc.invoice.number}${doc.invoice.vehicle.registration ? `-${doc.invoice.vehicle.registration}` : ''}.pdf`.replace(/[^\w.-]/g, '');

@@ -11,3 +11,6 @@ export function readableOn(hex: string) {
   const L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
   return L > 0.4 ? '#0b1220' : '#ffffff';
 }
+
+/** The product's own name, shown in "Powered by", emails and the sidebar. Set NEXT_PUBLIC_PRODUCT_NAME to rename. */
+export const PRODUCT_NAME = process.env.NEXT_PUBLIC_PRODUCT_NAME?.trim() || 'RampDesk';

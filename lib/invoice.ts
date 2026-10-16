@@ -11,7 +11,7 @@ export type InvoiceVehicle = { registration: string | null; make: string | null;
 export type InvoiceRow = {
   id: string; garage_id: string; job_id: string | null; customer_id: string | null; number: string;
   issued_at: string; due_at: string | null; is_vat_invoice: boolean; vat_number: string | null;
-  subtotal_pence: number; vat_pence: number; total_pence: number; paid_pence: number;
+  subtotal_pence: number; vat_pence: number; total_pence: number; paid_pence: number; credited_pence?: number;
   status: 'draft' | 'issued' | 'part_paid' | 'paid' | 'void'; notes: string | null; public_token: string;
   emailed_at: string | null; voided_at: string | null; void_reason: string | null; created_at: string;
   seller: InvoiceSeller; buyer: InvoiceBuyer; vehicle: InvoiceVehicle;
@@ -20,20 +20,45 @@ export type InvoiceLineRow = {
   id: string; type: 'labour' | 'part' | 'fee'; description: string; quantity: number | string; unit_price_pence: number;
   vat_rate: number | string; line_total_pence: number; part_number: string | null;
 };
-export type PaymentRow = { id: string; amount_pence: number; method: string; paid_at: string; reference: string | null };
+export type PaymentRow = {
+  id: string; amount_pence: number; method: string; paid_at: string; reference: string | null;
+  deposit?: boolean; credit_note_id?: string | null;
+};
+export type CreditSummary = { id: string; number: string; issued_at: string; total_pence: number; reason: string; public_token: string };
 
-export type InvoiceDoc = { invoice: InvoiceRow; lines: InvoiceLineRow[]; payments: PaymentRow[] };
+export type InvoiceDoc = {
+  kind?: 'invoice' | 'credit';
+  invoice: InvoiceRow; lines: InvoiceLineRow[]; payments: PaymentRow[];
+  credits?: CreditSummary[];
+  credited_lines?: Record<string, number | string>;
+  /** credit notes only */
+  against?: { id: string; number: string; issued_at: string };
+  refund?: { amount_pence: number; method: string | null };
+};
 
-export const balance = (i: Pick<InvoiceRow, 'total_pence' | 'paid_pence' | 'status'>) =>
-  i.status === 'void' ? 0 : Math.max(0, i.total_pence - i.paid_pence);
+type Money = Pick<InvoiceRow, 'total_pence' | 'paid_pence' | 'status'> & { credited_pence?: number | null };
 
-export type DisplayStatus = 'paid' | 'part_paid' | 'unpaid' | 'overdue' | 'void';
+/** Still owed by the customer */
+export const balance = (i: Money) =>
+  i.status === 'void' ? 0 : Math.max(0, i.total_pence - i.paid_pence - (i.credited_pence ?? 0));
 
-export function displayStatus(i: Pick<InvoiceRow, 'status' | 'due_at' | 'total_pence' | 'paid_pence'>, today: string): DisplayStatus {
+/** Paid more than is now owed (after a credit note or a large deposit): the garage owes this back */
+export const overpaid = (i: Money) =>
+  i.status === 'void' ? 0 : Math.max(0, i.paid_pence + (i.credited_pence ?? 0) - i.total_pence);
+
+export const fullyCredited = (i: Money) => (i.credited_pence ?? 0) > 0 && (i.credited_pence ?? 0) >= i.total_pence;
+
+/** The job's current invoice: not void and not cancelled by credit notes */
+export const isOpenInvoice = (i: Money) => i.status !== 'void' && !fullyCredited(i);
+
+export type DisplayStatus = 'paid' | 'part_paid' | 'unpaid' | 'overdue' | 'void' | 'credited';
+
+export function displayStatus(i: Money & Pick<InvoiceRow, 'due_at'>, today: string): DisplayStatus {
   if (i.status === 'void') return 'void';
-  if (i.status === 'paid') return 'paid';
+  if (fullyCredited(i)) return 'credited';
+  if (balance(i) === 0) return 'paid';
   if (i.due_at && i.due_at < today) return 'overdue';
-  return i.status === 'part_paid' ? 'part_paid' : 'unpaid';
+  return i.paid_pence > 0 ? 'part_paid' : 'unpaid';
 }
 
 export const STATUS_STYLE: Record<DisplayStatus, { label: string; className: string }> = {
@@ -42,9 +67,12 @@ export const STATUS_STYLE: Record<DisplayStatus, { label: string; className: str
   unpaid: { label: 'Unpaid', className: 'border-primary/30 bg-primary/10 text-primary' },
   overdue: { label: 'Overdue', className: 'border-destructive/30 bg-destructive/10 text-destructive' },
   void: { label: 'Void', className: 'text-muted-foreground line-through' },
+  credited: { label: 'Credited', className: 'text-muted-foreground' },
 };
 
 export const PAY_METHODS: Record<string, string> = { cash: 'Cash', card: 'Card', transfer: 'Bank transfer', stripe: 'Online' };
+
+export const docTitle = (d: InvoiceDoc) => (d.kind === 'credit' ? 'Credit note' : 'Invoice');
 
 /** VAT summary grouped by rate (UK VAT invoices show VAT per rate) */
 export function vatSummary(lines: InvoiceLineRow[]) {

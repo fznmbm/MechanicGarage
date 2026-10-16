@@ -19,7 +19,8 @@ import { cn } from '@/lib/utils';
 export const metadata = { title: 'Invoices' };
 const PAGE_SIZE = 25;
 
-type Row = Pick<InvoiceRow, 'id' | 'number' | 'issued_at' | 'due_at' | 'total_pence' | 'paid_pence' | 'status' | 'buyer' | 'vehicle'>;
+type Row = Pick<InvoiceRow, 'id' | 'number' | 'issued_at' | 'due_at' | 'total_pence' | 'paid_pence' | 'credited_pence' | 'status' | 'buyer' | 'vehicle'>;
+type CreditRow = Pick<InvoiceRow, 'id' | 'number' | 'issued_at' | 'total_pence' | 'buyer' | 'vehicle'> & { reason: string; invoice: { id: string; number: string } | null };
 
 const TABS = [
   { key: '', label: 'All' },
@@ -27,6 +28,7 @@ const TABS = [
   { key: 'overdue', label: 'Overdue' },
   { key: 'paid', label: 'Paid' },
   { key: 'void', label: 'Void' },
+  { key: 'credits', label: 'Credit notes' },
 ];
 
 export default async function InvoicesPage({
@@ -41,7 +43,7 @@ export default async function InvoicesPage({
   const sb = await createClient();
 
   let query = sb.from('invoices')
-    .select('id, number, issued_at, due_at, total_pence, paid_pence, status, buyer, vehicle', { count: 'exact' })
+    .select('id, number, issued_at, due_at, total_pence, paid_pence, credited_pence, status, buyer, vehicle', { count: 'exact' })
     .eq('garage_id', m.garage_id)
     .order('issued_at', { ascending: false }).order('number', { ascending: false });
   if (tab === 'unpaid') query = query.in('status', ['issued', 'part_paid']);
@@ -53,12 +55,18 @@ export default async function InvoicesPage({
     query = query.or(`number.ilike.%${term}%,buyer->>name.ilike.%${term}%,vehicle->>registration.ilike.%${term.toUpperCase().replace(/\s/g, '')}%`);
   }
 
+  let credits = sb.from('credit_notes')
+    .select('id, number, issued_at, total_pence, reason, buyer, vehicle, invoice:invoices(id, number)', { count: 'exact' })
+    .eq('garage_id', m.garage_id).order('issued_at', { ascending: false }).order('number', { ascending: false });
+  if (term) credits = credits.or(`number.ilike.%${term}%,buyer->>name.ilike.%${term}%,vehicle->>registration.ilike.%${term.toUpperCase().replace(/\s/g, '')}%`);
+
   const [{ data, count }, { data: open }, { data: payments }] = await Promise.all([
-    query.range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1),
-    sb.from('invoices').select('total_pence, paid_pence, status, due_at').eq('garage_id', m.garage_id).in('status', ['issued', 'part_paid']),
+    (tab === 'credits' ? credits : query).range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1),
+    sb.from('invoices').select('total_pence, paid_pence, credited_pence, status, due_at').eq('garage_id', m.garage_id).in('status', ['issued', 'part_paid']),
     sb.from('payments').select('amount_pence').eq('garage_id', m.garage_id).gte('paid_at', `${monthStart}T00:00:00Z`),
   ]);
-  const rows = (data ?? []) as Row[];
+  const rows = (tab === 'credits' ? [] : data ?? []) as Row[];
+  const creditRows = (tab === 'credits' ? data ?? [] : []) as unknown as CreditRow[];
   const outstanding = (open ?? []).reduce((s, i) => s + balance(i as Row), 0);
   const overdue = (open ?? []).filter((i) => i.due_at && i.due_at < today).reduce((s, i) => s + balance(i as Row), 0);
   const taken = (payments ?? []).reduce((s, x) => s + x.amount_pence, 0);
@@ -110,7 +118,39 @@ export default async function InvoicesPage({
           </div>
         </div>
 
-        {rows.length ? (
+        {tab === 'credits' && creditRows.length > 0 && (
+          <>
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Credit note</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead className="hidden md:table-cell">Against</TableHead>
+                  <TableHead className="hidden lg:table-cell">Reason</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {creditRows.map((r) => (
+                  <TableRow key={r.id} className="relative">
+                    <TableCell>
+                      <Link href={`/invoices/credit/${r.id}`} className="after:absolute after:inset-0">
+                        <div className="font-mono text-sm font-medium">{r.number}</div>
+                        <div className="text-xs text-muted-foreground">{ukDate(r.issued_at)}</div>
+                      </Link>
+                    </TableCell>
+                    <TableCell className="max-w-48 truncate">{r.buyer?.name ?? '—'}</TableCell>
+                    <TableCell className="hidden font-mono text-sm md:table-cell">{r.invoice?.number}</TableCell>
+                    <TableCell className="hidden max-w-64 truncate text-muted-foreground lg:table-cell">{r.reason}</TableCell>
+                    <TableCell className="text-right tabular-nums">−{gbp(r.total_pence)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <Pagination page={page} pageSize={PAGE_SIZE} total={count ?? 0} href={(n) => qs({ page: String(n) })} />
+          </>
+        )}
+        {tab === 'credits' && creditRows.length > 0 ? null : rows.length ? (
           <>
             <Table>
               <TableHeader>
@@ -137,7 +177,7 @@ export default async function InvoicesPage({
                       <TableCell className="max-w-48 truncate">{r.buyer?.name ?? '—'}</TableCell>
                       <TableCell className="hidden md:table-cell">{r.vehicle?.registration && <RegPlate reg={r.vehicle.registration} />}</TableCell>
                       <TableCell className="text-right tabular-nums">{gbp(r.total_pence)}</TableCell>
-                      <TableCell className="hidden text-right tabular-nums sm:table-cell">{r.status === 'void' ? '—' : gbp(balance(r))}</TableCell>
+                      <TableCell className="hidden text-right tabular-nums sm:table-cell">{ds === 'void' || ds === 'credited' ? '—' : gbp(balance(r))}</TableCell>
                       <TableCell><Badge variant="outline" className={STATUS_STYLE[ds].className}>{STATUS_STYLE[ds].label}</Badge></TableCell>
                     </TableRow>
                   );
@@ -150,8 +190,10 @@ export default async function InvoicesPage({
           <div className="flex flex-col items-center gap-3 px-4 py-16 text-center">
             <span className="flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary"><Receipt className="size-6" /></span>
             <div>
-              <p className="font-medium">{q || tab ? 'No invoices match' : 'No invoices yet'}</p>
-              <p className="text-sm text-muted-foreground">Open a job card and choose “Create invoice” when the work is done.</p>
+              <p className="font-medium">{tab === 'credits' ? 'No credit notes' : q || tab ? 'No invoices match' : 'No invoices yet'}</p>
+              <p className="text-sm text-muted-foreground">
+                {tab === 'credits' ? 'Credit notes are issued from an invoice, to refund or correct it.' : 'Open a job card and choose “Create invoice” when the work is done.'}
+              </p>
             </div>
             {(q || tab) && <Button variant="outline" asChild><Link href="/invoices">Clear filters</Link></Button>}
           </div>

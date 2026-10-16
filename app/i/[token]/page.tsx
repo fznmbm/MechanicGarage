@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from '@/lib/brand';
 import { notFound } from 'next/navigation';
 import { Download, Phone, Mail, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -49,7 +50,7 @@ export default async function PublicInvoicePage({ params }: { params: Promise<{ 
           </div>
         </div>
         <InvoiceDocument doc={doc} className="rounded-xl" />
-        <p className="text-center text-xs text-slate-400">Powered by RampDesk</p>
+        <p className="text-center text-xs text-slate-400">Powered by {PRODUCT_NAME}</p>
       </div>
     </div>
   );

@@ -19,3 +19,14 @@ export async function logReminder(input: { vehicleId: string; kind: string; due:
   });
   revalidatePath('/reminders');
 }
+
+/** Declined work: mark the items as followed up so they leave the list */
+export async function markDeclinedFollowedUp(fd: FormData) {
+  const m = await getMembership();
+  if (!m || m.role === 'mechanic') return;
+  const ids = fd.getAll('line_id').map(String).filter((x) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 50);
+  if (!ids.length) return;
+  const sb = await createClient();
+  await sb.from('job_lines').update({ followed_up_at: new Date().toISOString() }).in('id', ids).eq('garage_id', m.garage_id);
+  revalidatePath('/reminders');
+}

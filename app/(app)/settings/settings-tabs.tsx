@@ -15,7 +15,7 @@ import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { GarageLogo } from '@/components/garage-logo';
-import { readableOn } from '@/lib/brand';
+import { readableOn, PRODUCT_NAME } from '@/lib/brand';
 import { cn } from '@/lib/utils';
 import type { ActionState, Bay, Garage } from '@/lib/types';
 import { saveBranding, saveBusiness, saveInvoicing, saveVat, saveWorkshop } from './actions';
@@ -102,7 +102,7 @@ function BusinessForm({ g, rootDomain }: { g: Garage; rootDomain: string }) {
           </Field>
         </div>
         <div className="rounded-lg bg-muted/60 px-4 py-3 text-sm">
-          <span className="text-muted-foreground">Your RampDesk address: </span>
+          <span className="text-muted-foreground">Your {PRODUCT_NAME} address: </span>
           <span className="font-medium">{g.slug}.{rootDomain}</span>
         </div>
       </SectionCard>

@@ -18,6 +18,9 @@ export const metadata = { title: 'Reports' };
 
 type Report = {
   sales: { invoices: number; net: number; vat: number; gross: number };
+  credits?: { count: number; gross: number };
+  deposits_held?: number;
+  feedback?: { count: number; average: number | null; low: number };
   by_type: Record<string, number>;
   payments: { total: number; by_method: Record<string, number> };
   daily: { day: string; taken: number }[];
@@ -92,9 +95,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {[
               { label: 'Money taken', value: gbp(r.payments.total), sub: Object.entries(r.payments.by_method).map(([k, v]) => `${PAY_METHODS[k] ?? k} ${gbp(v)}`).join(' · ') || 'No payments', icon: Wallet },
-              { label: 'Invoiced', value: gbp(r.sales.gross), sub: `${r.sales.invoices} invoice${r.sales.invoices === 1 ? '' : 's'}${r.sales.vat ? ` · ${gbp(r.sales.vat)} VAT` : ''}`, icon: Receipt },
+              { label: 'Invoiced', value: gbp(r.sales.gross), sub: `${r.sales.invoices} invoice${r.sales.invoices === 1 ? '' : 's'}${r.credits?.count ? ` less ${r.credits.count} credit note${r.credits.count === 1 ? '' : 's'} (${gbp(r.credits.gross)})` : ''}${r.sales.vat ? ` · ${gbp(r.sales.vat)} VAT` : ''}`, icon: Receipt },
               { label: 'Jobs completed', value: String(r.jobs.completed), sub: `${r.jobs.opened} opened${r.sales.invoices ? ` · ${gbp(Math.round(r.sales.gross / r.sales.invoices))} average invoice` : ''}`, icon: Wrench },
-              { label: 'Owed to you now', value: gbp(r.outstanding), sub: 'All unpaid invoices', icon: AlertCircle },
+              { label: 'Owed to you now', value: gbp(r.outstanding), sub: `All unpaid invoices${r.deposits_held ? ` · ${gbp(r.deposits_held)} deposits held` : ''}`, icon: AlertCircle },
             ].map((k) => (
               <Card key={k.label} className="gap-1">
                 <CardHeader>
@@ -198,6 +201,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
               <Button variant="outline" asChild><a href={`/reports/export?type=xero&${qs}`}><Download /> Xero sales invoices</a></Button>
               <Button variant="outline" asChild><a href={`/reports/export?type=invoices&${qs}`}><Download /> Invoice list</a></Button>
               <Button variant="outline" asChild><a href={`/reports/export?type=payments&${qs}`}><Download /> Payments</a></Button>
+              <Button variant="outline" asChild><a href={`/reports/export?type=credits&${qs}`}><Download /> Credit notes</a></Button>
             </CardContent>
           </Card>
         </>

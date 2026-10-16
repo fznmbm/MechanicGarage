@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from '@/lib/brand';
 import { headers } from 'next/headers';
 import { MapPin, Phone } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -69,7 +70,7 @@ export default async function BookPage() {
             )}
           </CardContent>
         </Card>
-        <p className="text-center text-xs text-muted-foreground">Powered by RampDesk</p>
+        <p className="text-center text-xs text-muted-foreground">Powered by {PRODUCT_NAME}</p>
       </div>
     </div>
   );

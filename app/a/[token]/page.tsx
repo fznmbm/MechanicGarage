@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from '@/lib/brand';
 import { notFound } from 'next/navigation';
 import { Phone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -114,7 +115,7 @@ export default async function ApprovalPage({ params }: { params: Promise<{ token
             </CardContent>
           </Card>
         )}
-        <p className="text-center text-xs text-muted-foreground">Powered by RampDesk</p>
+        <p className="text-center text-xs text-muted-foreground">Powered by {PRODUCT_NAME}</p>
       </div>
     </div>
   );
