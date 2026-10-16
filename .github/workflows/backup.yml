@@ -1,0 +1,62 @@
+name: Daily backup and keep-alive
+
+on:
+  schedule:
+    - cron: '17 2 * * *'   # every day at 02:17 UTC
+  workflow_dispatch:        # "Run workflow" button for a manual backup
+
+permissions:
+  contents: read
+
+jobs:
+  keep-alive:
+    # Free Supabase projects pause after 7 days without activity. One small request a day prevents it.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' --retry 3 --retry-delay 10 \
+            "$SUPABASE_URL/rest/v1/garages?select=id&limit=1" \
+            -H "apikey: $SUPABASE_PUBLISHABLE_KEY")
+          echo "Supabase answered $code"
+          test "$code" = 200
+
+  backup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PG_MAJOR: '17'   # must be the same or newer than your Supabase Postgres version
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Postgres client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y -qq postgresql-client-$PG_MAJOR
+          echo "/usr/lib/postgresql/$PG_MAJOR/bin" >> "$GITHUB_PATH"
+
+      - name: Dump and encrypt
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          OUT_DIR: out
+        run: mkdir -p out && bash scripts/backup.sh
+
+      - name: Keep monthly backups longer
+        id: keep
+        run: |
+          echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+          echo "days=$([ "$(date -u +%d)" = 01 ] && echo 90 || echo 30)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backup-${{ steps.keep.outputs.date }}-${{ github.run_attempt }}
+          path: out/*.gpg
+          retention-days: ${{ steps.keep.outputs.days }}
+          if-no-files-found: error
+          compression-level: 0
