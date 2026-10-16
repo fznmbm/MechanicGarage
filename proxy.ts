@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
+import { needsCode } from './lib/mfa';
 
 const ROOT = process.env.NEXT_PUBLIC_ROOT_DOMAIN!;
-const PUBLIC_PATHS = ['/login', '/book', '/auth', '/i/', '/c/', '/f/', '/join/', '/a/', '/u/', '/api/'];
+const PUBLIC_PATHS = ['/login', '/book', '/auth', '/i/', '/c/', '/f/', '/q/', '/join/', '/a/', '/u/', '/api/'];
 
 function resolveTenant(req: NextRequest): { slug?: string; host?: string; fromQuery?: boolean } {
   const host = (req.headers.get('host') ?? '').toLowerCase();
@@ -59,13 +60,19 @@ export async function proxy(req: NextRequest) {
   }
 
   const path = req.nextUrl.pathname;
-  if (!user && !PUBLIC_PATHS.some((p) => path.startsWith(p))) {
+  const isPublic = PUBLIC_PATHS.some((p) => path.startsWith(p));
+  const send = (pathname: string, search = '') => {
     const url = req.nextUrl.clone();
-    url.pathname = '/login';
-    url.search = '';
+    url.pathname = pathname;
+    url.search = search;
     const redirect = NextResponse.redirect(url);
     res.cookies.getAll().forEach((c) => redirect.cookies.set(c));
     return redirect;
+  };
+  if (!user && !isPublic) return send('/login');
+  // two-factor: signed in with a password but the 6-digit code hasn't been entered yet
+  if (user && !isPublic && !path.startsWith('/api/') && (await needsCode(supabase, user))) {
+    return send('/login/mfa', `?next=${encodeURIComponent(path + req.nextUrl.search)}`);
   }
   return res;
 }

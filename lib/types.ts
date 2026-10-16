@@ -43,6 +43,10 @@ export type Garage = {
   feedback_auto_email?: boolean;
   google_review_url?: string | null;
   authorisation_text?: string | null;
+  estimate_prefix?: string;
+  estimate_valid_days?: number;
+  estimate_chase_days?: number;
+  mfa_required_roles?: string[];
 };
 
 export type MenuLine = { type: 'labour' | 'part' | 'fee'; description: string; quantity: number; unit_price_pence: number; no_vat?: boolean };

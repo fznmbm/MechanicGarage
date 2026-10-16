@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, CalendarDays, Wrench, Users, Car, Receipt, Settings, LogOut, ChevronsUpDown, BellRing, Boxes, BarChart3, ShieldCheck,
-  MonitorSmartphone, CarFront,
+  MonitorSmartphone, CarFront, FileSignature, UserCog,
 } from 'lucide-react';
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader,
@@ -34,6 +34,7 @@ const GROUPS: { label: string; items: Item[] }[] = [
     { href: '/customers', label: 'Customers', icon: Users },
     { href: '/vehicles', label: 'Vehicles', icon: Car },
     { href: '/parts', label: 'Parts & stock', icon: Boxes },
+    { href: '/estimates', label: 'Estimates', icon: FileSignature, roles: ['owner', 'reception'] },
     { href: '/invoices', label: 'Invoices', icon: Receipt, roles: ['owner', 'reception'] },
   ]},
   { label: 'Admin', items: [
@@ -117,6 +118,7 @@ export function AppSidebar({
                   <div className="truncate text-xs text-muted-foreground">{user.email}</div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem asChild><Link href="/account"><UserCog /> Account and security</Link></DropdownMenuItem>
                 {isAdmin && <DropdownMenuItem asChild><Link href="/admin"><ShieldCheck /> Platform admin</Link></DropdownMenuItem>}
                 <DropdownMenuItem onSelect={() => signOut()}><LogOut /> Sign out</DropdownMenuItem>
               </DropdownMenuContent>

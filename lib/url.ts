@@ -1,7 +1,7 @@
 import 'server-only';
 import { headers } from 'next/headers';
 
-/** Absolute origin of the current request, e.g. https://smiths.rampdesk.co.uk */
+/** Absolute origin of the current request, e.g. https://smiths.ironbay.co.uk */
 export async function siteOrigin() {
   const h = await headers();
   const host = h.get('x-forwarded-host') ?? h.get('host') ?? 'localhost:3000';

@@ -63,3 +63,14 @@ export async function emailFeedbackRequest(o: { garage: Garage; to: string | nul
   ], { href: o.link, label: 'Rate your visit' });
   return send(o.garage, o.to, `How did we do with your ${car}?`, body);
 }
+
+/** One friendly nudge for an estimate that hasn't been answered */
+export async function emailEstimateChase(o: { garage: Garage; to: string | null; name: string | null; number: string; registration: string | null; link: string }) {
+  if (!emailConfigured() || !validEmail(o.to)) return false;
+  const car = o.registration ? prettyReg(o.registration) : 'vehicle';
+  const body = layout(o.garage, o.name?.split(' ')[0] ?? '', [
+    `Just checking you received our estimate ${escapeHtml(o.number)} for your ${escapeHtml(car)}.`,
+    'You can look over it and accept or decline online. If you have any questions, just reply to this email.',
+  ], { href: o.link, label: 'View your estimate' });
+  return send(o.garage, o.to, `Your estimate ${o.number} from ${o.garage.name}`, body);
+}

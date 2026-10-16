@@ -26,9 +26,11 @@ function InvoicePdf({ doc, logo }: { doc: InvoiceDoc; logo: string | null }) {
   const brand = brandOf(sel);
   const vat = i.is_vat_invoice;
   const credit = doc.kind === 'credit';
-  const owed = credit ? 0 : balance(i);
+  const est = doc.kind === 'estimate';
+  const owed = credit || est ? 0 : balance(i);
   const credited = i.credited_pence ?? 0;
-  const label = credit ? 'Credit note' : 'Invoice';
+  const label = credit ? 'Credit note' : est ? 'Estimate' : 'Invoice';
+  const counted = (l: (typeof lines)[number]) => !l.optional || l.accepted !== false;
   const summary = vat ? vatSummary(lines) : [];
   const w = vat ? col : { ...col, desc: '62%' };
 
@@ -53,12 +55,13 @@ function InvoicePdf({ doc, logo }: { doc: InvoiceDoc; logo: string | null }) {
             </View>
           </View>
           <View style={{ alignItems: 'flex-end' }}>
-            <Text style={[s.h1, { color: brand }]}>{credit ? (vat ? 'VAT CREDIT NOTE' : 'CREDIT NOTE') : vat ? 'VAT INVOICE' : 'INVOICE'}</Text>
+            <Text style={[s.h1, { color: brand }]}>{est ? 'ESTIMATE' : credit ? (vat ? 'VAT CREDIT NOTE' : 'CREDIT NOTE') : vat ? 'VAT INVOICE' : 'INVOICE'}</Text>
             <View style={{ marginTop: 6, alignItems: 'flex-end' }}>
               <Text><Text style={s.muted}>{label} no.  </Text><Text style={s.bold}>{i.number}</Text></Text>
-              <Text><Text style={s.muted}>Date{vat ? ' / tax point' : ''}  </Text>{ukDate(i.issued_at)}</Text>
+              <Text><Text style={s.muted}>Date{vat && !est ? ' / tax point' : ''}  </Text>{ukDate(i.issued_at)}</Text>
+              {est && i.due_at && <Text><Text style={s.muted}>Valid until  </Text>{ukDate(i.due_at)}</Text>}
               {credit && doc.against && <Text><Text style={s.muted}>Against invoice  </Text>{doc.against.number} of {ukDate(doc.against.issued_at)}</Text>}
-              {!credit && i.due_at && <Text><Text style={s.muted}>Due  </Text>{i.due_at === i.issued_at ? 'On receipt' : ukDate(i.due_at)}</Text>}
+              {!credit && !est && i.due_at && <Text><Text style={s.muted}>Due  </Text>{i.due_at === i.issued_at ? 'On receipt' : ukDate(i.due_at)}</Text>}
               {vat && sel.vat_number && <Text><Text style={s.muted}>VAT reg. no.  </Text>{sel.vat_number}</Text>}
             </View>
           </View>
@@ -67,7 +70,7 @@ function InvoicePdf({ doc, logo }: { doc: InvoiceDoc; logo: string | null }) {
         {/* parties */}
         <View style={[s.between, { paddingVertical: 14 }]}>
           <View style={{ width: '50%' }}>
-            <Text style={s.label}>{credit ? 'Customer' : 'Bill to'}</Text>
+            <Text style={s.label}>{credit ? 'Customer' : est ? 'Prepared for' : 'Bill to'}</Text>
             <Text style={s.bold}>{b.name ?? 'Customer'}</Text>
             {b.address && <Text style={s.muted}>{b.address}</Text>}
             {b.postcode && <Text style={s.muted}>{b.postcode}</Text>}
@@ -97,15 +100,16 @@ function InvoicePdf({ doc, logo }: { doc: InvoiceDoc; logo: string | null }) {
         </View>
         {lines.map((l, idx) => (
           <View key={l.id} style={[s.row, { backgroundColor: idx % 2 ? '#f8fafc' : '#ffffff' }]} wrap={false}>
-            <Text style={[s.td, { width: w.desc }]}>
+            <Text style={[s.td, { width: w.desc }, counted(l) ? {} : { color: '#94a3b8', textDecoration: 'line-through' }]}>
               {l.description}
+              {l.optional ? <Text style={{ color: '#b45309' }}>  (optional)</Text> : null}
               {l.part_number ? <Text style={s.muted}>  {l.part_number}</Text> : null}
               {l.type === 'labour' ? <Text style={s.muted}>  (labour, hrs)</Text> : null}
             </Text>
             <Text style={[s.td, { width: w.qty, textAlign: 'right' }]}>{qty(l.quantity)}</Text>
             <Text style={[s.td, { width: w.unit, textAlign: 'right' }]}>{gbp(l.unit_price_pence)}</Text>
             {vat && <Text style={[s.td, { width: w.vat, textAlign: 'right' }]}>{Number(l.vat_rate) > 0 ? `${Number(l.vat_rate)}%` : 'O/S'}</Text>}
-            <Text style={[s.td, s.bold, { width: w.amt, textAlign: 'right' }]}>{gbp(l.line_total_pence)}</Text>
+            <Text style={[s.td, s.bold, { width: w.amt, textAlign: 'right' }, counted(l) ? {} : { color: '#94a3b8', textDecoration: 'line-through' }]}>{gbp(l.line_total_pence)}</Text>
           </View>
         ))}
 
@@ -125,7 +129,7 @@ function InvoicePdf({ doc, logo }: { doc: InvoiceDoc; logo: string | null }) {
             <View style={s.between}><Text style={s.muted}>{vat ? 'Subtotal (ex VAT)' : 'Subtotal'}</Text><Text>{gbp(i.subtotal_pence)}</Text></View>
             {vat && <View style={s.between}><Text style={s.muted}>VAT</Text><Text>{gbp(i.vat_pence)}</Text></View>}
             <View style={[s.between, { borderTopWidth: 2, borderTopColor: brand, marginTop: 3, paddingTop: 3 }]}>
-              <Text style={[s.bold, { fontSize: 12 }]}>{credit ? 'Total credited' : 'Total'}</Text><Text style={[s.bold, { fontSize: 12 }]}>{gbp(i.total_pence)}</Text>
+              <Text style={[s.bold, { fontSize: 12 }]}>{credit ? 'Total credited' : est ? 'Estimate total' : 'Total'}</Text><Text style={[s.bold, { fontSize: 12 }]}>{gbp(i.total_pence)}</Text>
             </View>
             {credit && doc.refund && doc.refund.amount_pence > 0 && (
               <View style={s.between}>
@@ -133,19 +137,20 @@ function InvoicePdf({ doc, logo }: { doc: InvoiceDoc; logo: string | null }) {
                 <Text>{gbp(doc.refund.amount_pence)}</Text>
               </View>
             )}
-            {!credit && (i.paid_pence !== 0 || credited > 0) && i.status !== 'void' && (
+            {est && lines.some((l) => !counted(l)) && <Text style={[s.muted, { fontSize: 8 }]}>Items struck through are not included.</Text>}
+            {!credit && !est && (i.paid_pence !== 0 || credited > 0) && i.status !== 'void' && (
               <>
                 {i.paid_pence !== 0 && <View style={s.between}><Text style={s.muted}>Paid</Text><Text>-{gbp(i.paid_pence)}</Text></View>}
                 {credited > 0 && <View style={s.between}><Text style={s.muted}>Credit notes</Text><Text>-{gbp(credited)}</Text></View>}
                 <View style={s.between}><Text style={s.bold}>Balance due</Text><Text style={s.bold}>{gbp(owed)}</Text></View>
               </>
             )}
-            {!credit && fullyCredited(i) && i.status !== 'void' && (
+            {!credit && !est && fullyCredited(i) && i.status !== 'void' && (
               <Text style={{ marginTop: 6, backgroundColor: '#f1f5f9', color: '#475569', textAlign: 'center', paddingVertical: 4, fontFamily: 'Helvetica-Bold' }}>
                 CANCELLED BY CREDIT NOTE
               </Text>
             )}
-            {!credit && !fullyCredited(i) && i.status === 'paid' && owed === 0 && (
+            {!credit && !est && !fullyCredited(i) && i.status === 'paid' && owed === 0 && (
               <Text style={{ marginTop: 6, backgroundColor: '#ecfdf5', color: '#047857', textAlign: 'center', paddingVertical: 4, fontFamily: 'Helvetica-Bold' }}>
                 PAID IN FULL{payments.length ? ` · ${ukDate(payments[payments.length - 1].paid_at)}` : ''}
               </Text>
@@ -155,7 +160,9 @@ function InvoicePdf({ doc, logo }: { doc: InvoiceDoc; logo: string | null }) {
 
         {/* footer */}
         <View style={{ marginTop: 22, borderTopWidth: 1, borderTopColor: '#e2e8f0', paddingTop: 10 }} wrap={false}>
+          {est && doc.estimate?.title ? <Text style={[s.bold, { marginBottom: 4 }]}>{doc.estimate.title}</Text> : null}
           {i.notes && <Text style={{ marginBottom: 8 }}>{credit ? <Text style={s.bold}>Reason: </Text> : null}{i.notes}</Text>}
+          {est && <Text style={{ marginBottom: 8 }}>This is an estimate, not a bill. {i.due_at ? `Prices are held until ${ukDate(i.due_at)}. ` : ''}If we find anything else that needs doing, we’ll ask you first.</Text>}
           {owed > 0 && sel.bank_details && (
             <View style={{ marginBottom: 8 }}>
               <Text style={s.bold}>How to pay</Text>
@@ -194,4 +201,4 @@ export async function renderInvoicePdf(doc: InvoiceDoc): Promise<Buffer> {
 }
 
 export const pdfFilename = (doc: InvoiceDoc) =>
-  `${doc.kind === 'credit' ? 'CreditNote' : 'Invoice'}-${doc.invoice.number}${doc.invoice.vehicle.registration ? `-${doc.invoice.vehicle.registration}` : ''}.pdf`.replace(/[^\w.-]/g, '');
+  `${doc.kind === 'credit' ? 'CreditNote' : doc.kind === 'estimate' ? 'Estimate' : 'Invoice'}-${doc.invoice.number}${doc.invoice.vehicle.registration ? `-${doc.invoice.vehicle.registration}` : ''}.pdf`.replace(/[^\w.-]/g, '');

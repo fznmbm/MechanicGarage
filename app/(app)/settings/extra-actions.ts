@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getMembership } from '@/lib/tenant';
 import { orNull, str } from '@/lib/validate';
 import type { ActionState, MenuLine } from '@/lib/types';
+import { adminConfigured, createAdminClient } from '@/lib/supabase/admin';
 
 const oops = (message: string): ActionState => ({ ok: false, message, ts: Date.now() });
 const done = (message: string): ActionState => ({ ok: true, message, ts: Date.now() });
@@ -26,6 +27,12 @@ export async function saveFeatures(_: ActionState, fd: FormData): Promise<Action
   if (review && !/^https:\/\/\S+$/.test(review)) errors.google_review_url = 'Paste the full link, starting https://';
   if (!/^[A-Za-z0-9-]{1,8}$/.test(prefix)) errors.credit_prefix = 'Up to 8 letters, numbers or dashes, e.g. CN-';
   if (auth.length > 600) errors.authorisation_text = 'Keep it under 600 characters';
+  const estPrefix = str(fd, 'estimate_prefix');
+  const valid = Number(str(fd, 'estimate_valid_days'));
+  const chase = Number(str(fd, 'estimate_chase_days'));
+  if (!/^[A-Za-z0-9-]{1,8}$/.test(estPrefix)) errors.estimate_prefix = 'Up to 8 letters, numbers or dashes, e.g. EST-';
+  if (!Number.isInteger(valid) || valid < 1 || valid > 365) errors.estimate_valid_days = 'Between 1 and 365 days';
+  if (!Number.isInteger(chase) || chase < 0 || chase > 30) errors.estimate_chase_days = 'Between 0 and 30 days';
   if (Object.keys(errors).length) return fail(errors);
 
   const on = (k: string) => fd.get(k) === 'on';
@@ -38,6 +45,9 @@ export async function saveFeatures(_: ActionState, fd: FormData): Promise<Action
     google_review_url: orNull(review),
     authorisation_text: orNull(auth),
     credit_prefix: prefix.toUpperCase(),
+    estimate_prefix: estPrefix.toUpperCase(),
+    estimate_valid_days: valid,
+    estimate_chase_days: chase,
   }).eq('id', c.m.garage_id);
   if (error) return oops(error.message);
   revalidatePath('/', 'layout');
@@ -83,5 +93,35 @@ export async function deleteMenuItem(fd: FormData) {
   const c = await owner();
   if (!c) return;
   await c.sb.from('service_menu').delete().eq('id', str(fd, 'id')).eq('garage_id', c.m.garage_id);
+  revalidatePath('/settings');
+}
+
+/** Which roles must use two-factor login */
+export async function saveSecurity(_: ActionState, fd: FormData): Promise<ActionState> {
+  const c = await owner();
+  if (!c) return oops('Only the owner can change settings');
+  const roles = ['owner', 'reception', 'mechanic'].filter((r) => fd.get(`mfa_${r}`) === 'on');
+  if (roles.includes('owner')) {
+    const { data: { user } } = await c.sb.auth.getUser();
+    if (!user?.factors?.some((f) => f.status === 'verified')) {
+      return oops('Turn on two-factor for your own account first (Account and security), so you don’t lock yourself out.');
+    }
+  }
+  const { error } = await c.sb.from('garages').update({ mfa_required_roles: roles }).eq('id', c.m.garage_id);
+  if (error) return oops(error.message);
+  revalidatePath('/settings');
+  return done(roles.length ? 'Two-factor requirement saved' : 'Two-factor is now optional for everyone');
+}
+
+/** A staff member lost their phone: remove their authenticator so they can sign in and set it up again */
+export async function resetMemberMfa(fd: FormData) {
+  const c = await owner();
+  if (!c || !adminConfigured()) return;
+  const userId = str(fd, 'user_id');
+  const { data: member } = await c.sb.from('garage_members').select('user_id').eq('garage_id', c.m.garage_id).eq('user_id', userId).maybeSingle();
+  if (!member) return;
+  const admin = createAdminClient();
+  const { data } = await admin.auth.admin.mfa.listFactors({ userId });
+  for (const f of data?.factors ?? []) await admin.auth.admin.mfa.deleteFactor({ id: f.id, userId });
   revalidatePath('/settings');
 }

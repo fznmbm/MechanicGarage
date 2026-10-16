@@ -13,4 +13,4 @@ export function readableOn(hex: string) {
 }
 
 /** The product's own name, shown in "Powered by", emails and the sidebar. Set NEXT_PUBLIC_PRODUCT_NAME to rename. */
-export const PRODUCT_NAME = process.env.NEXT_PUBLIC_PRODUCT_NAME?.trim() || 'RampDesk';
+export const PRODUCT_NAME = process.env.NEXT_PUBLIC_PRODUCT_NAME?.trim() || 'IronBay';

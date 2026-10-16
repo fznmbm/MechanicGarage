@@ -19,6 +19,8 @@ export type InvoiceRow = {
 export type InvoiceLineRow = {
   id: string; type: 'labour' | 'part' | 'fee'; description: string; quantity: number | string; unit_price_pence: number;
   vat_rate: number | string; line_total_pence: number; part_number: string | null;
+  /** estimates only */
+  optional?: boolean; accepted?: boolean; no_vat?: boolean;
 };
 export type PaymentRow = {
   id: string; amount_pence: number; method: string; paid_at: string; reference: string | null;
@@ -27,14 +29,35 @@ export type PaymentRow = {
 export type CreditSummary = { id: string; number: string; issued_at: string; total_pence: number; reason: string; public_token: string };
 
 export type InvoiceDoc = {
-  kind?: 'invoice' | 'credit';
+  kind?: 'invoice' | 'credit' | 'estimate';
   invoice: InvoiceRow; lines: InvoiceLineRow[]; payments: PaymentRow[];
   credits?: CreditSummary[];
   credited_lines?: Record<string, number | string>;
   /** credit notes only */
   against?: { id: string; number: string; issued_at: string };
   refund?: { amount_pence: number; method: string | null };
+  /** estimates only */
+  estimate?: EstimateInfo;
 };
+
+export type EstimateStatus = 'draft' | 'sent' | 'accepted' | 'declined' | 'converted';
+export type EstimateInfo = {
+  status: EstimateStatus; title: string | null; valid_until: string | null; expired: boolean;
+  sent_at: string | null; viewed_at: string | null; responded_at: string | null; accepted_by: string | null;
+  response_note: string | null; vat_rate: number; book_url: string | null; garage_slug: string;
+};
+
+export const ESTIMATE_STATUS: Record<EstimateStatus | 'expired', { label: string; className: string }> = {
+  draft: { label: 'Draft', className: 'text-muted-foreground' },
+  sent: { label: 'Sent', className: 'border-primary/30 bg-primary/10 text-primary' },
+  accepted: { label: 'Accepted', className: 'border-success/30 bg-success/10 text-success' },
+  declined: { label: 'Declined', className: 'border-destructive/30 bg-destructive/10 text-destructive' },
+  converted: { label: 'Job created', className: 'border-success/30 bg-success/10 text-success' },
+  expired: { label: 'Expired', className: 'border-warning/40 bg-warning/15 text-warning-foreground dark:text-warning' },
+};
+
+export const estimateDisplay = (e: { status: EstimateStatus; valid_until: string | null }, today: string) =>
+  e.status === 'sent' && e.valid_until && e.valid_until < today ? 'expired' : e.status;
 
 type Money = Pick<InvoiceRow, 'total_pence' | 'paid_pence' | 'status'> & { credited_pence?: number | null };
 
@@ -72,7 +95,7 @@ export const STATUS_STYLE: Record<DisplayStatus, { label: string; className: str
 
 export const PAY_METHODS: Record<string, string> = { cash: 'Cash', card: 'Card', transfer: 'Bank transfer', stripe: 'Online' };
 
-export const docTitle = (d: InvoiceDoc) => (d.kind === 'credit' ? 'Credit note' : 'Invoice');
+export const docTitle = (d: InvoiceDoc) => (d.kind === 'credit' ? 'Credit note' : d.kind === 'estimate' ? 'Estimate' : 'Invoice');
 
 /** VAT summary grouped by rate (UK VAT invoices show VAT per rate) */
 export function vatSummary(lines: InvoiceLineRow[]) {

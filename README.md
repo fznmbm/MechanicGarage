@@ -1,4 +1,4 @@
-# RampDesk
+# IronBay
 
 White-label garage management system for UK repair and MOT garages.
 Next.js 16 · Tailwind 4 · shadcn/ui (Radix) · Supabase · Vercel
@@ -7,7 +7,7 @@ Next.js 16 · Tailwind 4 · shadcn/ui (Radix) · Supabase · Vercel
 
 1. `npm install`
 2. Copy `.env.example` to `.env.local` and fill in your Supabase URL and publishable (anon) key.
-3. In Supabase → SQL editor, run every file in `supabase/` in number order (01 to 15).
+3. In Supabase → SQL editor, run every file in `supabase/` in number order (01 to 16).
    Each is run once; skip any you have already run.
 4. Supabase → Authentication → Providers → Email: turn off "Confirm email" for development.
 5. `npm run dev` and open http://localhost:3000 → "Create an account" → set up your garage.
@@ -65,6 +65,25 @@ Needs three things on the server (Vercel → Settings → Environment Variables)
 Each garage switches reminders on in Settings → Reminders. Only customers who agreed are emailed,
 and every email has an unsubscribe link. Without this setup, the Reminders page still gives
 one-tap WhatsApp reminders.
+
+## Estimates
+
+Estimates (sidebar → Estimates, or “Estimate” on a vehicle) price up work before it's booked. Send by email, WhatsApp or link;
+the customer opens it, ticks any optional extras, types their name to accept, or declines. Unanswered estimates get one
+reminder email after a few days (Settings → Features; needs email and the daily job set up). An accepted estimate becomes a
+job card in one click.
+
+## Sign-in, two-factor and the activity log
+
+- **Forgot password** and **email confirmation** links land on `/auth/confirm`. In Supabase → Authentication → URL Configuration,
+  add your addresses to *Redirect URLs*: `https://ironbay.co.uk/**`, `https://*.ironbay.co.uk/**` and `http://localhost:3000/**`.
+- So links work even when opened on a different device, change two email templates (Authentication → Emails):
+  - *Confirm signup*: link to `{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=email`
+  - *Reset password*: link to `{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=recovery`
+- **Two-factor login**: everyone can turn it on under the user menu → Account and security (authenticator app, free).
+  Owners can require it by role in Settings → Security, and reset it for someone who lost their phone (needs the service key).
+  Once someone has it on, the database itself refuses their data until the code has been entered.
+- **Activity** (Settings → Activity, owners only): who changed money, settings and staff, and who deleted records.
 
 ## Credit notes, refunds and deposits
 

@@ -9,6 +9,7 @@ import { BrandStyle } from '@/components/brand-style';
 import { createClient } from '@/lib/supabase/server';
 import { getMembership } from '@/lib/tenant';
 import { planState } from '@/lib/plan';
+import { hasVerifiedFactor } from '@/lib/mfa';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
@@ -25,11 +26,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const m = await getMembership();
   if (!m) redirect('/onboarding');
   const sb = await createClient();
-  const [{ data: isAdmin }, { data: flags }] = await Promise.all([
+  const [{ data: isAdmin }, { data: flags }, { data: { user } }] = await Promise.all([
     sb.rpc('is_platform_admin'),
-    // optional features (errors, e.g. before migration 15 is run, just leave them off)
-    sb.from('garages').select('feature_courtesy_cars').eq('id', m.garage_id).maybeSingle(),
+    // optional features (errors, e.g. before migrations 15–16 are run, just leave them off)
+    sb.from('garages').select('feature_courtesy_cars, mfa_required_roles').eq('id', m.garage_id).maybeSingle(),
+    sb.auth.getUser(),
   ]);
+  // the garage requires two-factor for this role and it isn't set up yet
+  if ((flags?.mfa_required_roles as string[] | undefined)?.includes(m.role) && !hasVerifiedFactor(user)) redirect('/account?setup=1');
   const plan = planState(m.garage, nowMs());
   const banner =
     plan.kind === 'trial' && plan.daysLeft <= 5 ? `Your free trial ends in ${plan.daysLeft} day${plan.daysLeft === 1 ? '' : 's'}.`

@@ -1,8 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
-  ChevronLeft, Pencil, Trash2, ShieldAlert, Lightbulb, User, Phone, History, Plus, CalendarPlus, Wrench,
-} from 'lucide-react';
+  ChevronLeft, Pencil, Trash2, ShieldAlert, Lightbulb, User, Phone, History, Plus, CalendarPlus, Wrench, FileSignature } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -79,6 +78,7 @@ export default async function VehiclePage({
           <>
             <Button asChild><Link href={`/diary/new?vehicle=${v.id}`}><CalendarPlus /> Book in</Link></Button>
             <Button variant="outline" asChild><Link href={`/jobs/new?vehicle=${v.id}`}><Wrench /> New job</Link></Button>
+            {m.role !== 'mechanic' && <Button variant="outline" asChild><Link href={`/estimates/new?vehicle=${v.id}`}><FileSignature /> Estimate</Link></Button>}
             {canLookup && <RefreshButton id={v.id} />}
             <Button variant="outline" asChild><Link href={`/vehicles/${v.id}/edit`}><Pencil /> Edit</Link></Button>
           </>

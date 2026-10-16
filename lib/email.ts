@@ -10,7 +10,7 @@ export async function sendEmail(opts: {
   attachments?: { filename: string; content: Buffer }[];
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!emailConfigured()) return { ok: false, error: 'Email sending is not set up' };
-  // EMAIL_FROM like "invoices@rampdesk.co.uk"; the garage name is used as the display name
+  // EMAIL_FROM like "invoices@ironbay.co.uk"; the garage name is used as the display name
   const fromAddr = process.env.EMAIL_FROM!.trim().replace(/^.*<(.+)>$/, '$1');
   const from = opts.fromName ? `${opts.fromName.replace(/["<>]/g, '')} <${fromAddr}>` : process.env.EMAIL_FROM!.trim();
   try {

@@ -86,17 +86,34 @@ export function FeaturesTab({ g, emailOn }: { g: Garage; emailOn: boolean }) {
       <Card>
         <CardHeader className="border-b">
           <CardTitle>Paperwork</CardTitle>
-          <CardDescription>Wording and numbering on job sheets and credit notes.</CardDescription>
+          <CardDescription>Wording and numbering on job sheets, estimates and credit notes.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           <Field label="Customer authorisation" htmlFor="authorisation_text" error={err('authorisation_text')}
             hint="What the customer signs at check-in, on the job card and printed job sheet. Leave empty for the standard wording.">
             <Textarea id="authorisation_text" name="authorisation_text" rows={3} defaultValue={g.authorisation_text ?? ''} placeholder={DEFAULT_AUTHORISATION} />
           </Field>
-          <Field label="Credit note prefix" htmlFor="credit_prefix" error={err('credit_prefix')} className="max-w-48"
-            hint="e.g. CN- gives CN-00001">
-            <Input id="credit_prefix" name="credit_prefix" defaultValue={g.credit_prefix ?? 'CN-'} />
-          </Field>
+          <div className="grid gap-5 sm:grid-cols-2">
+            <Field label="Credit note prefix" htmlFor="credit_prefix" error={err('credit_prefix')} hint="e.g. CN- gives CN-00001">
+              <Input id="credit_prefix" name="credit_prefix" defaultValue={g.credit_prefix ?? 'CN-'} />
+            </Field>
+            <Field label="Estimate prefix" htmlFor="estimate_prefix" error={err('estimate_prefix')} hint="e.g. EST- gives EST-00001">
+              <Input id="estimate_prefix" name="estimate_prefix" defaultValue={g.estimate_prefix ?? 'EST-'} />
+            </Field>
+            <Field label="Estimates are valid for" htmlFor="estimate_valid_days" error={err('estimate_valid_days')}>
+              <div className="relative">
+                <Input id="estimate_valid_days" name="estimate_valid_days" type="number" min={1} max={365} defaultValue={g.estimate_valid_days ?? 30} className="pr-14" />
+                <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">days</span>
+              </div>
+            </Field>
+            <Field label="Chase unanswered estimates after" htmlFor="estimate_chase_days" error={err('estimate_chase_days')}
+              hint="One reminder email. 0 to never chase.">
+              <div className="relative">
+                <Input id="estimate_chase_days" name="estimate_chase_days" type="number" min={0} max={30} defaultValue={g.estimate_chase_days ?? 3} className="pr-14" />
+                <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">days</span>
+              </div>
+            </Field>
+          </div>
         </CardContent>
         <CardFooter className="justify-end border-t">
           <Button type="submit" disabled={pending}>{pending && <Loader2 className="animate-spin" />} Save changes</Button>

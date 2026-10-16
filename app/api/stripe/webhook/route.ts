@@ -10,7 +10,7 @@ const STATUS: Record<string, string> = {
 
 type Sub = { id: string; customer: string; status: string; current_period_end?: number; metadata?: { garage_id?: string }; items?: { data?: { current_period_end?: number }[] } };
 
-/** Stripe → RampDesk: keeps each garage's plan in step with its subscription */
+/** Stripe → IronBay: keeps each garage's plan in step with its subscription */
 export async function POST(req: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
   if (!secret || !adminConfigured()) return new Response('Not configured', { status: 503 });

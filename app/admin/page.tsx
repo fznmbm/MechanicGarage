@@ -11,6 +11,7 @@ import { createClient } from '@/lib/supabase/server';
 import { gbp, ukDate } from '@/lib/format';
 import { PLAN_LABEL } from '@/lib/plan';
 import { garageLink } from '@/lib/garage-url';
+import { adminConfigured, createAdminClient } from '@/lib/supabase/admin';
 
 export const metadata = { title: 'Platform admin', robots: { index: false } };
 
@@ -31,7 +32,26 @@ async function update(fd: FormData) {
   revalidatePath('/admin');
 }
 
-export default async function AdminPage() {
+/** An owner lost their phone: remove their authenticator (needs the service key) */
+async function resetMfa(fd: FormData) {
+  'use server';
+  const sb = await createClient();
+  const { data: isAdmin } = await sb.rpc('is_platform_admin');
+  const email = String(fd.get('email') ?? '').trim().toLowerCase();
+  if (!isAdmin || !adminConfigured() || !email) redirect('/admin');
+  const admin = createAdminClient();
+  const { data: m } = await admin.from('garage_members').select('user_id').ilike('email', email).limit(1).maybeSingle();
+  let done = false;
+  if (m) {
+    const { data } = await admin.auth.admin.mfa.listFactors({ userId: m.user_id });
+    for (const f of data?.factors ?? []) await admin.auth.admin.mfa.deleteFactor({ id: f.id, userId: m.user_id });
+    done = true;
+  }
+  redirect(`/admin?mfa=${done ? 'reset' : 'notfound'}`);
+}
+
+export default async function AdminPage({ searchParams }: { searchParams: Promise<{ mfa?: string }> }) {
+  const { mfa } = await searchParams;
   const sb = await createClient();
   const { data: { user } } = await sb.auth.getUser();
   if (!user) redirect('/login?next=/admin');
@@ -51,6 +71,25 @@ export default async function AdminPage() {
           </div>
           <div className="flex items-center gap-2"><Button variant="outline" asChild><Link href="/">Back to app</Link></Button><ThemeToggle /></div>
         </header>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Reset someone’s two-factor login</CardTitle>
+            <CardDescription>
+              For an owner who has lost their phone. Check who they are first (call them on the garage’s number).
+              {mfa === 'reset' && <b className="text-success"> Done: they can sign in with their password and set it up again.</b>}
+              {mfa === 'notfound' && <b className="text-destructive"> No staff member with that email.</b>}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {adminConfigured() ? (
+              <form suppressHydrationWarning action={resetMfa} className="flex flex-wrap gap-2">
+                <Input name="email" type="email" placeholder="owner@garage.co.uk" className="max-w-xs" required />
+                <Button type="submit" variant="outline">Reset two-factor</Button>
+              </form>
+            ) : <p className="text-sm text-muted-foreground">Needs SUPABASE_SERVICE_ROLE_KEY on the server.</p>}
+          </CardContent>
+        </Card>
 
         <div className="space-y-4">
           {garages.map((g) => (

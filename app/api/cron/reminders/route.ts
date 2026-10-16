@@ -2,6 +2,7 @@ import { adminConfigured, createAdminClient } from '@/lib/supabase/admin';
 import { emailConfigured, sendEmail } from '@/lib/email';
 import { garageLink } from '@/lib/garage-url';
 import { reminderEmail } from '@/lib/reminders';
+import { emailEstimateChase } from '@/lib/notify';
 import { ukDatePlus, ukToday } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
@@ -74,5 +75,27 @@ export async function GET(req: Request) {
       }
     }
   }
-  return Response.json({ ok: true, sent, failed });
+  // estimates sent a few days ago with no answer: one reminder each
+  let chased = 0;
+  const { data: eg } = await sb.from('garages')
+    .select('id, name, slug, custom_domain, phone, email, brand_colour, estimate_chase_days')
+    .gt('estimate_chase_days', 0).in('plan_status', ['trial', 'active', 'comped']);
+  for (const g of (eg ?? []) as (Pick<G, 'id' | 'name' | 'slug' | 'custom_domain' | 'phone' | 'email' | 'brand_colour'> & { estimate_chase_days: number })[]) {
+    const { data: due } = await sb.from('estimates')
+      .select('id, number, public_token, customer:customers(name, email), vehicle:vehicles(registration)')
+      .eq('garage_id', g.id).eq('status', 'sent').is('chased_at', null)
+      .lte('sent_at', new Date(Date.now() - g.estimate_chase_days * 86_400_000).toISOString())
+      .or(`valid_until.is.null,valid_until.gte.${today}`).limit(100);
+    for (const e of (due ?? []) as unknown as { id: string; number: string; public_token: string; customer: { name: string; email: string | null } | null; vehicle: { registration: string } | null }[]) {
+      if (Date.now() - started > 55_000) return Response.json({ ok: true, sent, failed, chased, partial: true });
+      // claim first so it's never sent twice
+      const { data: claimed } = await sb.from('estimates').update({ chased_at: new Date().toISOString() }).eq('id', e.id).is('chased_at', null).select('id');
+      if (!claimed?.length || !e.customer?.email) continue;
+      const ok = await emailEstimateChase({ garage: g, to: e.customer.email, name: e.customer.name, number: e.number,
+        registration: e.vehicle?.registration ?? null, link: garageLink(g, `/q/${e.public_token}`) });
+      if (ok) chased++;
+      await new Promise((r) => setTimeout(r, 550));
+    }
+  }
+  return Response.json({ ok: true, sent, failed, chased });
 }

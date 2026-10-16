@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { Users, CalendarCheck, BellRing, CreditCard, ToggleRight, ListChecks } from 'lucide-react';
+import { Users, CalendarCheck, BellRing, CreditCard, ToggleRight, ListChecks, ShieldCheck, History } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { getMembership } from '@/lib/tenant';
 import { emailConfigured } from '@/lib/email';
@@ -11,6 +11,8 @@ import { planState } from '@/lib/plan';
 import type { Bay, Garage, MenuItem } from '@/lib/types';
 import { FeaturesTab } from './features';
 import { ServiceMenuTab } from './service-menu';
+import { SecurityTab, type MemberMfa } from './security';
+import { ActivityLog } from './activity';
 import { SettingsTabs, type ExtraTab } from './settings-tabs';
 import { StaffTab, type Invite, type Member } from './staff';
 import { BookingTab, type OnlineService } from './booking';
@@ -19,12 +21,12 @@ import { PlanTab } from './plan';
 
 export const metadata = { title: 'Settings' };
 
-const TABS = ['business', 'branding', 'workshop', 'invoicing', 'vat', 'staff', 'menu', 'booking', 'reminders', 'features', 'plan'];
+const TABS = ['business', 'branding', 'workshop', 'invoicing', 'vat', 'staff', 'menu', 'booking', 'reminders', 'features', 'security', 'activity', 'plan'];
 const nowMs = () => Date.now();
 
 export default async function SettingsPage({
   searchParams,
-}: { searchParams: Promise<{ tab?: string; billing?: string }> }) {
+}: { searchParams: Promise<{ tab?: string; billing?: string; area?: string }> }) {
   const m = await getMembership();
   if (!m || m.role !== 'owner') redirect('/');
 
@@ -42,7 +44,11 @@ export default async function SettingsPage({
   if (!garage) redirect('/');
   const g = garage as Garage;
 
-  const { tab, billing } = await searchParams;
+  const { tab, billing, area } = await searchParams;
+  const { data: mfa } = await sb.rpc('member_mfa', { p_garage: m.garage_id });
+  const mfaOn = new Map(((mfa ?? []) as { user_id: string; enabled: boolean }[]).map((x) => [x.user_id, x.enabled]));
+  const memberMfa: MemberMfa[] = ((members ?? []) as Member[]).filter((x) => x.active)
+    .map((x) => ({ user_id: x.user_id, display_name: x.display_name, role: x.role, enabled: !!mfaOn.get(x.user_id) }));
   const initialTab = tab && TABS.includes(tab) ? tab : 'business';
 
   const extra: ExtraTab[] = [
@@ -66,6 +72,14 @@ export default async function SettingsPage({
     {
       value: 'features', label: 'Features', icon: <ToggleRight />,
       content: <FeaturesTab g={g} emailOn={emailConfigured()} />,
+    },
+    {
+      value: 'security', label: 'Security', icon: <ShieldCheck />,
+      content: <SecurityTab required={g.mfa_required_roles ?? []} members={memberMfa} selfId={user?.id ?? ''} canReset={adminConfigured()} />,
+    },
+    {
+      value: 'activity', label: 'Activity', icon: <History />,
+      content: <ActivityLog garageId={m.garage_id} area={area ?? ''} />,
     },
     {
       value: 'plan', label: 'Plan', icon: <CreditCard />,

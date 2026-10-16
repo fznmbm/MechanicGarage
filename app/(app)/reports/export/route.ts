@@ -85,7 +85,7 @@ export async function GET(req: Request) {
   return new Response(csv(rows), {
     headers: {
       'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': `attachment; filename="rampdesk-${type}-${from}-to-${to}.csv"`,
+      'Content-Disposition': `attachment; filename="ironbay-${type}-${from}-to-${to}.csv"`,
       'Cache-Control': 'private, no-store',
     },
   });
