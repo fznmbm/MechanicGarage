@@ -79,11 +79,11 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
             {label}
           </Link>
         ))}
-        <form suppressHydrationWarning className="flex items-center gap-2">
+        <form suppressHydrationWarning className="flex flex-wrap items-center gap-2">
           <input suppressHydrationWarning type="hidden" name="range" value="custom" />
-          <Input type="date" name="from" defaultValue={from} aria-label="From" className="h-8 w-36" />
+          <Input type="date" name="from" defaultValue={from} aria-label="From" className="h-8 w-40" />
           <span className="text-xs text-muted-foreground">to</span>
-          <Input type="date" name="to" defaultValue={to} aria-label="To" className="h-8 w-36" />
+          <Input type="date" name="to" defaultValue={to} aria-label="To" className="h-8 w-40" />
           <Button type="submit" size="sm" variant="secondary">Apply</Button>
         </form>
       </div>

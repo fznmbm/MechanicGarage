@@ -85,7 +85,7 @@ export default async function EstimatesPage({ searchParams }: { searchParams: Pr
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Estimate</TableHead>
-                  <TableHead>Customer</TableHead>
+                  <TableHead className="hidden sm:table-cell">Customer</TableHead>
                   <TableHead className="hidden md:table-cell">Vehicle</TableHead>
                   <TableHead className="text-right">Total</TableHead>
                   <TableHead>Status</TableHead>
@@ -101,9 +101,10 @@ export default async function EstimatesPage({ searchParams }: { searchParams: Pr
                         <Link href={`/estimates/${r.id}`} className="after:absolute after:inset-0">
                           <div className="font-mono text-sm font-medium">{r.number}</div>
                           <div className="max-w-56 truncate text-xs text-muted-foreground">{ukDate(r.issued_at)}{r.title ? ` · ${r.title}` : ''}</div>
+                          <div className="max-w-40 truncate text-xs sm:hidden">{r.customer?.name}</div>
                         </Link>
                       </TableCell>
-                      <TableCell className="max-w-48 truncate">{r.customer?.name ?? '—'}</TableCell>
+                      <TableCell className="hidden max-w-48 truncate sm:table-cell">{r.customer?.name ?? '—'}</TableCell>
                       <TableCell className="hidden md:table-cell">{r.vehicle && <RegPlate reg={r.vehicle.registration} />}</TableCell>
                       <TableCell className="text-right tabular-nums">{gbp(t.gross)}</TableCell>
                       <TableCell>

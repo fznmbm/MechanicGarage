@@ -127,12 +127,13 @@ export default async function JobsPage({
           <Button asChild><Link href="/jobs/new"><Plus /> New job</Link></Button>
         </div>
       ) : (
-        <div className="-mx-4 overflow-x-auto px-4 pb-2 md:mx-0 md:px-0">
-          <div className="grid min-w-[1100px] grid-cols-5 gap-3">
+        <div className="pb-2 xl:overflow-x-auto">
+          {/* phones: one column per status, stacked; wide screens: the five columns side by side */}
+          <div className="grid gap-3 md:grid-cols-2 xl:min-w-[1100px] xl:grid-cols-5">
             {BOARD.map((s) => {
               const col = jobs.filter((j) => j.status === s);
               return (
-                <section key={s} className={cn('flex flex-col gap-2 rounded-xl bg-muted/50 p-2', highlight === s && 'ring-2 ring-primary')}>
+                <section key={s} className={cn('flex flex-col gap-2 rounded-xl bg-muted/50 p-2', col.length === 0 && 'hidden md:flex', highlight === s && 'ring-2 ring-primary')}>
                   <header className="flex items-center justify-between px-1 py-1">
                     <span className="flex items-center gap-2 text-sm font-medium">
                       <span className={cn('size-2 rounded-full', JOB_STATUS[s].dot)} />

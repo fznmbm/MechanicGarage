@@ -29,7 +29,7 @@ function TableHead({ className, ...props }: React.ComponentProps<'th'>) {
   );
 }
 function TableCell({ className, ...props }: React.ComponentProps<'td'>) {
-  return <td data-slot="table-cell" className={cn('px-3 py-3 align-middle whitespace-nowrap', className)} {...props} />;
+  return <td data-slot="table-cell" className={cn('px-3 py-3 align-middle sm:whitespace-nowrap', className)} {...props} />;
 }
 
 export { Table, TableHeader, TableBody, TableHead, TableRow, TableCell };

@@ -135,4 +135,13 @@
   [role='button']:not(:disabled) {
     cursor: pointer;
   }
+  /* Grid items default to min-width: auto, so a wide table or long word would stretch the
+     whole page on a phone. Let them shrink; wide content scrolls inside its own box instead. */
+  .grid > * {
+    min-width: 0;
+  }
+  /* Long unbroken text (emails, part numbers, notes) wraps instead of pushing the layout */
+  p, li, dd, h1, h2, h3 {
+    overflow-wrap: break-word;
+  }
 }

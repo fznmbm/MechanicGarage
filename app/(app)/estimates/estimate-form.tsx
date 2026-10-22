@@ -75,21 +75,26 @@ export function EstimateForm(p: EstimateFormProps) {
           </Field>
 
           <div className="space-y-2">
-            <div className="hidden grid-cols-[6.5rem_1fr_6rem_4.5rem_6rem_2rem] gap-2 px-1 text-xs font-medium text-muted-foreground md:grid">
+            <div className="hidden grid-cols-[6.5rem_1fr_6rem_4.5rem_6rem_2rem] gap-2 px-1 text-xs font-medium text-muted-foreground lg:grid">
               <span>Type</span><span>Description</span><span>Part no.</span><span>Qty / hrs</span><span>Price £</span><span />
             </div>
             {lines.map((l, i) => (
-              <div key={i} className="grid grid-cols-[6.5rem_1fr] gap-2 rounded-md border bg-muted/20 p-2 md:grid-cols-[6.5rem_1fr_6rem_4.5rem_6rem_2rem] md:border-0 md:bg-transparent md:p-0">
+              <div key={i} className="grid grid-cols-[6.5rem_1fr] gap-2 rounded-md border bg-muted/20 p-2 lg:grid-cols-[6.5rem_1fr_6rem_4.5rem_6rem_2rem] lg:border-0 lg:bg-transparent lg:p-0">
                 <NativeSelect value={l.type} onChange={(e) => set(i, { type: e.target.value as Draft['type'] })} aria-label="Type" className="h-8">
                   <option value="labour">Labour</option><option value="part">Part</option><option value="fee">Fee</option>
                 </NativeSelect>
                 <Input value={l.description} onChange={(e) => set(i, { description: e.target.value })} placeholder="Description" className="h-8" aria-label="Description" />
-                <Input value={l.part_number} onChange={(e) => set(i, { part_number: e.target.value })} placeholder="—" className="h-8" aria-label="Part number" disabled={l.type !== 'part'} />
-                <Input value={l.quantity} onChange={(e) => set(i, { quantity: e.target.value })} inputMode="decimal" className="h-8 text-right" aria-label="Quantity" />
-                <Input value={l.price} onChange={(e) => set(i, { price: e.target.value })} inputMode="decimal" placeholder="0.00" className="h-8 text-right" aria-label="Unit price" />
-                <Button type="button" variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-destructive" aria-label="Remove line"
+                <div className="col-span-full grid grid-cols-[1fr_4.5rem_6rem] gap-2 lg:contents">
+                  <label className="space-y-0.5"><span className="text-[11px] text-muted-foreground lg:hidden">Part no.</span>
+                    <Input value={l.part_number} onChange={(e) => set(i, { part_number: e.target.value })} placeholder="—" className="h-8" aria-label="Part number" disabled={l.type !== 'part'} /></label>
+                  <label className="space-y-0.5"><span className="text-[11px] text-muted-foreground lg:hidden">{l.type === 'labour' ? 'Hours' : 'Qty'}</span>
+                    <Input value={l.quantity} onChange={(e) => set(i, { quantity: e.target.value })} inputMode="decimal" className="h-8 text-right" aria-label="Quantity" /></label>
+                  <label className="space-y-0.5"><span className="text-[11px] text-muted-foreground lg:hidden">Price £</span>
+                    <Input value={l.price} onChange={(e) => set(i, { price: e.target.value })} inputMode="decimal" placeholder="0.00" className="h-8 text-right" aria-label="Unit price" /></label>
+                </div>
+                <Button type="button" variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-destructive max-lg:hidden" aria-label="Remove line"
                   onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}><Trash2 className="size-3.5" /></Button>
-                <div className="col-span-full flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground md:col-start-2">
+                <div className="col-span-full flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-muted-foreground lg:col-start-2">
                   <label className="flex items-center gap-1.5">
                     <input type="checkbox" checked={l.optional} onChange={(e) => set(i, { optional: e.target.checked })} className="size-3.5 accent-primary" /> Optional extra
                   </label>
@@ -98,6 +103,8 @@ export function EstimateForm(p: EstimateFormProps) {
                       <input type="checkbox" checked={l.no_vat} onChange={(e) => set(i, { no_vat: e.target.checked })} className="size-3.5 accent-primary" /> No VAT (e.g. MOT fee)
                     </label>
                   )}
+                  <button type="button" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}
+                    className="ml-auto flex items-center gap-1 text-destructive lg:hidden"><Trash2 className="size-3.5" /> Remove</button>
                 </div>
               </div>
             ))}

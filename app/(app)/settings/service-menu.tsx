@@ -51,10 +51,14 @@ function Editor({ item, labourRate, onClose }: { item: MenuItem | null; labourRa
               <option value="labour">Labour</option><option value="part">Part</option><option value="fee">Fee</option>
             </NativeSelect>
             <Input value={l.description} onChange={(e) => set(i, { description: e.target.value })} placeholder="Description" className="h-8" aria-label="Description" />
-            <Input value={l.quantity} onChange={(e) => set(i, { quantity: e.target.value })} inputMode="decimal" className="h-8 text-right" aria-label="Quantity" />
-            <Input value={l.price} onChange={(e) => set(i, { price: e.target.value })} inputMode="decimal" placeholder="0.00" className="h-8 text-right" aria-label="Unit price" />
-            <Button type="button" variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-destructive" aria-label="Remove line"
-              onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}><Trash2 className="size-3.5" /></Button>
+            <div className="col-span-full grid grid-cols-[1fr_1fr_auto] items-end gap-2 sm:contents">
+              <label className="space-y-0.5"><span className="text-[11px] text-muted-foreground sm:hidden">{l.type === 'labour' ? 'Hours' : 'Qty'}</span>
+                <Input value={l.quantity} onChange={(e) => set(i, { quantity: e.target.value })} inputMode="decimal" className="h-8 text-right" aria-label="Quantity" /></label>
+              <label className="space-y-0.5"><span className="text-[11px] text-muted-foreground sm:hidden">Price £</span>
+                <Input value={l.price} onChange={(e) => set(i, { price: e.target.value })} inputMode="decimal" placeholder="0.00" className="h-8 text-right" aria-label="Unit price" /></label>
+              <Button type="button" variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-destructive" aria-label="Remove line"
+                onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}><Trash2 className="size-3.5" /></Button>
+            </div>
             {l.type === 'fee' && (
               <label className="col-span-full flex items-center gap-2 text-xs text-muted-foreground sm:col-start-2">
                 <input type="checkbox" checked={l.no_vat} onChange={(e) => set(i, { no_vat: e.target.checked })} className="size-3.5 accent-primary" />

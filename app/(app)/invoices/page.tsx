@@ -124,7 +124,7 @@ export default async function InvoicesPage({
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Credit note</TableHead>
-                  <TableHead>Customer</TableHead>
+                  <TableHead className="hidden sm:table-cell">Customer</TableHead>
                   <TableHead className="hidden md:table-cell">Against</TableHead>
                   <TableHead className="hidden lg:table-cell">Reason</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
@@ -137,9 +137,10 @@ export default async function InvoicesPage({
                       <Link href={`/invoices/credit/${r.id}`} className="after:absolute after:inset-0">
                         <div className="font-mono text-sm font-medium">{r.number}</div>
                         <div className="text-xs text-muted-foreground">{ukDate(r.issued_at)}</div>
+                        <div className="max-w-40 truncate text-xs sm:hidden">{r.buyer?.name}</div>
                       </Link>
                     </TableCell>
-                    <TableCell className="max-w-48 truncate">{r.buyer?.name ?? '—'}</TableCell>
+                    <TableCell className="hidden max-w-48 truncate sm:table-cell">{r.buyer?.name ?? '—'}</TableCell>
                     <TableCell className="hidden font-mono text-sm md:table-cell">{r.invoice?.number}</TableCell>
                     <TableCell className="hidden max-w-64 truncate text-muted-foreground lg:table-cell">{r.reason}</TableCell>
                     <TableCell className="text-right tabular-nums">−{gbp(r.total_pence)}</TableCell>
@@ -156,7 +157,7 @@ export default async function InvoicesPage({
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Invoice</TableHead>
-                  <TableHead>Customer</TableHead>
+                  <TableHead className="hidden sm:table-cell">Customer</TableHead>
                   <TableHead className="hidden md:table-cell">Vehicle</TableHead>
                   <TableHead className="text-right">Total</TableHead>
                   <TableHead className="hidden text-right sm:table-cell">Balance</TableHead>
@@ -172,9 +173,10 @@ export default async function InvoicesPage({
                         <Link href={`/invoices/${r.id}`} className="after:absolute after:inset-0">
                           <div className="font-mono text-sm font-medium">{r.number}</div>
                           <div className="text-xs text-muted-foreground">{ukDate(r.issued_at)}</div>
+                          <div className="max-w-40 truncate text-xs sm:hidden">{r.buyer?.name}</div>
                         </Link>
                       </TableCell>
-                      <TableCell className="max-w-48 truncate">{r.buyer?.name ?? '—'}</TableCell>
+                      <TableCell className="hidden max-w-48 truncate sm:table-cell">{r.buyer?.name ?? '—'}</TableCell>
                       <TableCell className="hidden md:table-cell">{r.vehicle?.registration && <RegPlate reg={r.vehicle.registration} />}</TableCell>
                       <TableCell className="text-right tabular-nums">{gbp(r.total_pence)}</TableCell>
                       <TableCell className="hidden text-right tabular-nums sm:table-cell">{ds === 'void' || ds === 'credited' ? '—' : gbp(balance(r))}</TableCell>

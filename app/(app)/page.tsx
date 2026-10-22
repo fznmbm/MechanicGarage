@@ -81,20 +81,20 @@ export default async function Dashboard() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         {kpis.map((k) => (
           <Link key={k.label} href={k.href} className="group">
-            <Card className="gap-2 transition-colors group-hover:border-primary/40">
-              <CardHeader>
-                <CardDescription>{k.label}</CardDescription>
+            <Card className="h-full gap-2 py-4 transition-colors group-hover:border-primary/40 sm:py-6">
+              <CardHeader className="px-4 sm:px-6">
+                <CardDescription className="text-xs sm:text-sm">{k.label}</CardDescription>
                 <CardAction>
-                  <span className="flex size-8 items-center justify-center rounded-md bg-primary/10 text-primary">
+                  <span className="hidden size-8 items-center justify-center rounded-md bg-primary/10 text-primary sm:flex">
                     <k.icon className="size-4" />
                   </span>
                 </CardAction>
-                <CardTitle className="text-3xl font-semibold tabular-nums">{k.value}</CardTitle>
+                <CardTitle className="text-2xl font-semibold tabular-nums sm:text-3xl">{k.value}</CardTitle>
               </CardHeader>
-              <CardContent className="text-xs text-muted-foreground">{k.sub}</CardContent>
+              <CardContent className="px-4 text-xs text-muted-foreground sm:px-6">{k.sub}</CardContent>
             </Card>
           </Link>
         ))}

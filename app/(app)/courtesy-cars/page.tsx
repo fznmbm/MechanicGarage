@@ -59,7 +59,7 @@ export default async function CourtesyCarsPage() {
                 return (
                   <li key={l.id} className="flex flex-wrap items-center gap-3 py-3">
                     <RegPlate reg={car(l.car_id)?.registration} />
-                    <div className="min-w-0 flex-1 text-sm">
+                    <div className="min-w-48 flex-1 text-sm">
                       <div className="font-medium">
                         {l.customer ? <Link href={`/customers/${l.customer.id}`} className="hover:underline">{l.customer.name}</Link> : 'No customer'}
                         {l.job && <Link href={`/jobs/${l.job.id}`} className="ml-2 font-mono text-xs text-muted-foreground hover:underline">{jobNo(l.job.job_number)}</Link>}
@@ -91,9 +91,9 @@ export default async function CourtesyCarsPage() {
             {all.length > 0 && (
               <ul className="divide-y rounded-lg border">
                 {all.map((c) => (
-                  <li key={c.id} className={cn('flex items-center gap-3 px-3 py-2', !c.active && 'opacity-60')}>
+                  <li key={c.id} className={cn('flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2', !c.active && 'opacity-60')}>
                     <RegPlate reg={c.registration} />
-                    <span className="min-w-0 flex-1 truncate text-sm">{c.description}</span>
+                    <span className="min-w-32 flex-1 text-sm">{c.description}</span>
                     <Badge variant={outIds.has(c.id) ? 'secondary' : 'outline'}>{!c.active ? 'Off the road' : outIds.has(c.id) ? 'Out' : 'Free'}</Badge>
                     {staff && !outIds.has(c.id) && (
                       <form suppressHydrationWarning action={setCarActive}>

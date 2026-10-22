@@ -14,7 +14,7 @@ export function TakingsChart({ days }: { days: { day: string; taken: number }[] 
         <div className="flex h-48 flex-col justify-between py-0 text-right text-[11px] text-muted-foreground tabular-nums">
           <span>{gbp(top).replace('.00', '')}</span><span>{gbp(top / 2).replace('.00', '')}</span><span>£0</span>
         </div>
-        <div className="relative flex-1">
+        <div className="relative min-w-0 flex-1 overflow-hidden">
           <div className="pointer-events-none absolute inset-x-0 top-0 flex h-48 flex-col justify-between">
             <div className="border-t border-dashed" /><div className="border-t border-dashed" /><div className="border-t" />
           </div>

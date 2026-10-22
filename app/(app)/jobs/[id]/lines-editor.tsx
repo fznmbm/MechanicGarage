@@ -82,10 +82,10 @@ export function LinesEditor({
               <tr>
                 <th className="w-10 px-3 py-2 text-left font-medium"><span className="sr-only">Done</span></th>
                 <th className="px-3 py-2 text-left font-medium">Item</th>
-                <th className="px-3 py-2 text-right font-medium whitespace-nowrap">Qty / hrs</th>
-                {canPrice && <th className="px-3 py-2 text-right font-medium">Price</th>}
-                {canPrice && <th className="px-3 py-2 text-right font-medium">Total</th>}
-                <th className="w-20 px-3 py-2" />
+                <th className="hidden px-3 py-2 text-right font-medium whitespace-nowrap sm:table-cell">Qty / hrs</th>
+                {canPrice && <th className="hidden px-3 py-2 text-right font-medium sm:table-cell">Price</th>}
+                {canPrice && <th className="hidden px-3 py-2 text-right font-medium sm:table-cell">Total</th>}
+                <th className="w-10 px-1 py-2 sm:w-20 sm:px-3" />
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -95,24 +95,24 @@ export function LinesEditor({
                 const off = l.approval === 'declined';
                 return (
                   <tr key={l.id} className={cn(editing?.id === l.id && 'bg-primary/5', off && 'opacity-60')}>
-                    <td className="px-3 py-2.5 align-top">
+                    <td className="py-2.5 pr-1 pl-3 align-top sm:px-3">
                       <form suppressHydrationWarning action={toggleLineDone}>
                         <input suppressHydrationWarning type="hidden" name="job_id" value={jobId} />
                         <input suppressHydrationWarning type="hidden" name="line_id" value={l.id} />
                         <input suppressHydrationWarning type="hidden" name="done" value={l.done ? '0' : '1'} />
                         <button type="submit" aria-label={l.done ? 'Mark not done' : 'Mark done'} disabled={locked || off}
-                          className={cn('flex size-5 items-center justify-center rounded border transition',
+                          className={cn('flex size-6 items-center justify-center rounded border transition sm:size-5',
                             l.done ? 'border-success bg-success text-white' : 'hover:border-primary')}>
                           {l.done && <Check className="size-3.5" />}
                         </button>
                       </form>
                     </td>
-                    <td className="px-3 py-2.5">
-                      <div className="flex items-start gap-2">
+                    <td className="px-2 py-2.5 sm:px-3">
+                      <div className="flex flex-col items-start gap-1 sm:flex-row sm:gap-2">
                         <span className={cn('mt-0.5 inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase', T.className)}>
                           <T.icon className="size-3" />{T.label}
                         </span>
-                        <div className="min-w-0">
+                        <div className="w-full min-w-0">
                           <div className={cn('leading-snug', (l.done || off) && 'text-muted-foreground line-through')}>{l.description}</div>
                           <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
                             {l.part_number && <span className="font-mono">{l.part_number}</span>}
@@ -120,19 +120,27 @@ export function LinesEditor({
                             {canPrice && vatRate != null && l.no_vat && <span>No VAT</span>}
                             {A && <span className={cn('flex items-center gap-1 font-medium', A.className)}><A.icon className="size-3" />{A.label}</span>}
                           </div>
+                          {/* phones: quantity and price under the description */}
+                          <div className="mt-1 flex items-baseline justify-between gap-2 text-xs text-muted-foreground sm:hidden">
+                            <span className="tabular-nums">
+                              {Number(l.quantity)}{l.type === 'labour' ? ' hrs' : ''}
+                              {canPrice && <> × {l.unit_price_pence === 0 ? <span className="text-warning-foreground dark:text-warning">to price</span> : gbp(l.unit_price_pence)}</>}
+                            </span>
+                            {canPrice && <span className={cn('text-sm font-medium text-foreground tabular-nums', off && 'line-through')}>{gbp(lineTotal(l))}</span>}
+                          </div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">{Number(l.quantity)}</td>
+                    <td className="hidden px-3 py-2.5 text-right tabular-nums sm:table-cell">{Number(l.quantity)}</td>
                     {canPrice && (
-                      <td className={cn('px-3 py-2.5 text-right whitespace-nowrap tabular-nums', l.unit_price_pence === 0 && 'text-warning-foreground dark:text-warning')}>
+                      <td className={cn('hidden px-3 py-2.5 text-right whitespace-nowrap tabular-nums sm:table-cell', l.unit_price_pence === 0 && 'text-warning-foreground dark:text-warning')}>
                         {l.unit_price_pence === 0 ? 'To price' : gbp(l.unit_price_pence)}
                       </td>
                     )}
-                    {canPrice && <td className={cn('px-3 py-2.5 text-right font-medium tabular-nums', off && 'line-through')}>{gbp(lineTotal(l))}</td>}
-                    <td className="px-2 py-1.5 text-right whitespace-nowrap">
+                    {canPrice && <td className={cn('hidden px-3 py-2.5 text-right font-medium tabular-nums sm:table-cell', off && 'line-through')}>{gbp(lineTotal(l))}</td>}
+                    <td className="px-1 py-1.5 text-right align-top whitespace-nowrap sm:px-2 sm:align-middle">
                       {!locked && (
-                        <>
+                        <div className="flex flex-col items-end sm:flex-row sm:justify-end">
                           <Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Edit line" onClick={() => startEdit(l)}>
                             <Pencil className="size-3.5" />
                           </Button>
@@ -143,7 +151,7 @@ export function LinesEditor({
                               <Trash2 className="size-3.5" />
                             </Button>
                           </form>
-                        </>
+                        </div>
                       )}
                     </td>
                   </tr>
