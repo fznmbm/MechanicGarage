@@ -41,6 +41,8 @@ function resolveTenant(req: NextRequest): {
   }
   return { host }; // garage's own custom domain
 }
+const PREVIEW_BOTS =
+  /WhatsApp|facebookexternalhit|facebookcatalog|Twitterbot|LinkedInBot|Slackbot|Discordbot|TelegramBot|SkypeUriPreview|Googlebot|bingbot|Applebot|iMessage/i;
 
 export async function proxy(req: NextRequest) {
   const tenant = resolveTenant(req);
@@ -98,7 +100,17 @@ export async function proxy(req: NextRequest) {
     res.cookies.getAll().forEach((c) => redirect.cookies.set(c));
     return redirect;
   };
-  if (!user && !isPublic) return send("/login");
+  if (!user && !isPublic) {
+    // link previews (WhatsApp, Facebook…): show them the sign-in page's details directly rather than a redirect,
+    // which some of them don't follow
+    if (PREVIEW_BOTS.test(req.headers.get("user-agent") ?? "")) {
+      const url = req.nextUrl.clone();
+      url.pathname = "/login";
+      url.search = "";
+      return NextResponse.rewrite(url, { request: { headers } });
+    }
+    return send("/login");
+  }
   // two-factor: signed in with a password but the 6-digit code hasn't been entered yet
   if (
     user &&
