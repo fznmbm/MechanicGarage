@@ -1,13 +1,14 @@
 'use client';
-import { Copy, MessageCircle } from 'lucide-react';
+import { Copy } from 'lucide-react';
+import { WhatsAppIcon } from '@/components/whatsapp-icon';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 
 /** Opens WhatsApp and submits the surrounding form (marks the approval as sent) */
 export function SendLink({ href, label }: { href: string; label: string }) {
   return (
-    <Button type="submit" size="sm" onClick={() => window.open(href, '_blank', 'noopener')}>
-      <MessageCircle /> {label}
+    <Button variant="whatsapp" type="submit" size="sm" onClick={() => window.open(href, '_blank', 'noopener')}>
+      <WhatsAppIcon className="size-4" /> {label}
     </Button>
   );
 }

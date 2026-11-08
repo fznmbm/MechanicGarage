@@ -1,4 +1,5 @@
 import { PRODUCT_NAME } from '@/lib/brand';
+import { privateMeta } from '@/lib/og';
 import { notFound } from 'next/navigation';
 import { Download, Phone, Mail, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,10 +10,8 @@ import { loadPublicInvoice } from '@/app/(app)/invoices/data';
 
 export async function generateMetadata({ params }: { params: Promise<{ token: string }> }) {
   const doc = await loadPublicInvoice((await params).token);
-  return {
-    title: doc ? `Invoice ${doc.invoice.number} · ${doc.invoice.seller.name}` : 'Invoice',
-    robots: { index: false, follow: false },
-  };
+  return privateMeta(doc ? `Invoice ${doc.invoice.number} · ${doc.invoice.seller.name}` : 'Invoice', 'Your invoice',
+    'Tap to view, download or pay. Only people with this link can see it.');
 }
 
 export default async function PublicInvoicePage({ params }: { params: Promise<{ token: string }> }) {

@@ -10,19 +10,93 @@ type Ctx = {
 
 const car = (c: Ctx) => `${c.make ? `${c.make} ` : ''}${prettyReg(c.registration)}`;
 
-/** Short message for WhatsApp / text */
-export function reminderMessage(c: Ctx) {
-  const book = c.bookUrl ? ` Book online: ${c.bookUrl}` : '';
-  const call = c.phone ? `${c.bookUrl ? ' or call' : ' Call'} ${c.phone}` : '';
-  const hi = `Hi ${c.firstName || 'there'}, it's ${c.garage}.`;
-  if (c.kind === 'mot') {
-    return `${hi} The MOT on your ${car(c)} ${c.overdue ? 'expired' : 'is due'} on ${ukDate(c.due)}.${book}${call}${book || call ? '.' : ''}`;
-  }
-  if (c.kind === 'service') {
-    return `${hi} Your ${car(c)} is due a service${c.due ? ` around ${ukDate(c.due)}` : ''}.${book}${call}${book || call ? '.' : ''}`;
-  }
-  return `${hi} At its last MOT your ${car(c)} had ${c.advisories?.length === 1 ? 'an advisory' : 'some advisories'} worth sorting before they become a problem` +
-    `${c.advisories?.length ? `: ${c.advisories.slice(0, 2).join('; ')}` : ''}. Would you like a quote?${book}${call}${book || call ? '.' : ''}`;
+/* ---------- Message wording (WhatsApp) ----------
+   Garages can change the wording in Settings → Reminders. Fill-ins in {braces} are replaced;
+   a line whose fill-in has nothing to show (e.g. no booking link) is left out. *Stars* make WhatsApp text bold. */
+
+export const MESSAGE_FIELDS: { key: string; label: string }[] = [
+  { key: 'name', label: 'First name' },
+  { key: 'vehicle', label: 'Make' },
+  { key: 'reg', label: 'Registration' },
+  { key: 'date', label: 'Due date' },
+  { key: 'book_link', label: 'Booking link' },
+  { key: 'phone', label: 'Garage phone' },
+  { key: 'garage', label: 'Garage name' },
+];
+
+export const DEFAULT_MESSAGES: Record<ReminderKind, string> = {
+  mot: [
+    '*MOT reminder*',
+    '',
+    'Hi {name}, this is {garage}.',
+    '',
+    'The MOT on your {vehicle} *{reg}* {due} *{date}*.',
+    '',
+    'Book online in under a minute: {book_link}',
+    'Or just reply to this message, or call us on {phone}.',
+    '',
+    'Thank you,',
+    '{garage}',
+  ].join('\n'),
+  service: [
+    '*Service reminder*',
+    '',
+    'Hi {name}, this is {garage}.',
+    '',
+    'Your {vehicle} *{reg}* is due its service around *{date}*. Regular servicing keeps it safe, reliable and protects its value.',
+    '',
+    'Book online in under a minute: {book_link}',
+    'Or just reply to this message, or call us on {phone}.',
+    '',
+    'Thank you,',
+    '{garage}',
+  ].join('\n'),
+  advisory: [
+    'Hi {name}, this is {garage}.',
+    '',
+    'At its last MOT your {vehicle} *{reg}* had some advisories worth sorting before they become a problem:',
+    '{advisories}',
+    '',
+    'Would you like a quote? Just reply to this message or call us on {phone}.',
+    '',
+    'Thank you,',
+    '{garage}',
+  ].join('\n'),
+};
+
+/** Fill in a message: unknown fill-ins are left as typed, lines with an empty fill-in are dropped */
+export function renderMessage(template: string, vars: Record<string, string | null | undefined>) {
+  const lines = template.replace(/\r/g, '').split('\n').flatMap((line) => {
+    let empty = false;
+    const out = line.replace(/\{([a-z_]+)\}/g, (all, key: string) => {
+      if (!(key in vars)) return all;
+      const v = vars[key]?.trim();
+      if (!v) empty = true;
+      return v ?? '';
+    });
+    return empty ? [] : [out.trimEnd()];
+  });
+  // no double blank lines, none at the start or end
+  return lines.filter((l, i, a) => l !== '' || (i > 0 && a[i - 1] !== '')).join('\n').trim();
+}
+
+const shortDate = (ymd: string) =>
+  new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(`${ymd.slice(0, 10)}T00:00:00Z`));
+
+/** Short message for WhatsApp / text, in the garage's own wording if it has set one */
+export function reminderMessage(c: Ctx & { template?: string | null }) {
+  const advisories = c.advisories?.length ? c.advisories.slice(0, 3).map((a) => `• ${a}`).join('\n') : null;
+  return renderMessage(c.template?.trim() || DEFAULT_MESSAGES[c.kind], {
+    name: c.firstName || 'there',
+    garage: c.garage,
+    vehicle: c.make || 'vehicle',
+    reg: prettyReg(c.registration),
+    date: c.due ? shortDate(c.due) : null,
+    due: c.overdue ? 'ran out on' : 'is due on',
+    book_link: c.bookUrl ? `${c.bookUrl}${c.bookUrl.includes('?') ? '&' : '?'}reg=${encodeURIComponent(c.registration)}` : null,
+    phone: c.phone,
+    advisories,
+  });
 }
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!);

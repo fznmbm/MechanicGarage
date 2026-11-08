@@ -1,4 +1,5 @@
 import { PRODUCT_NAME } from '@/lib/brand';
+import { privateMeta } from '@/lib/og';
 import { notFound } from 'next/navigation';
 import { Phone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -12,7 +13,8 @@ import { CHECK_STYLE, type CheckStatus } from '@/lib/vhc';
 import { cn } from '@/lib/utils';
 import { ApprovalList, type ApprovalLine } from './approval-list';
 
-export const metadata = { title: 'Approve work on your vehicle', robots: { index: false } };
+export const generateMetadata = () => privateMeta('Approve work on your vehicle', 'Work to approve',
+  'Tap to see the photos and prices, and approve online. Only people with this link can see it.');
 
 type Doc = {
   garage: { name: string; phone: string | null; email: string | null; logo_url: string | null; brand_colour: string | null; vat_rate: number | string | null };

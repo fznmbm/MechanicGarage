@@ -47,6 +47,10 @@ export type Garage = {
   estimate_valid_days?: number;
   estimate_chase_days?: number;
   mfa_required_roles?: string[];
+  reminder_channel?: 'whatsapp' | 'both' | 'email';
+  msg_mot?: string | null;
+  msg_service?: string | null;
+  msg_advisory?: string | null;
 };
 
 export type MenuLine = { type: 'labour' | 'part' | 'fee'; description: string; quantity: number; unit_price_pence: number; no_vat?: boolean };

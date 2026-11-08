@@ -1,7 +1,8 @@
 'use client';
 import Link from 'next/link';
 import { useTransition } from 'react';
-import { MessageCircle, Phone, Check, CalendarPlus } from 'lucide-react';
+import { Phone, Check, CalendarPlus } from 'lucide-react';
+import { WhatsAppIcon } from '@/components/whatsapp-icon';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { logReminder } from './actions';
@@ -17,8 +18,8 @@ export function ReminderButtons({
   return (
     <div className="relative z-10 flex flex-wrap justify-end gap-1.5">
       {waUrl && (
-        <Button size="sm" variant="outline" asChild>
-          <a href={waUrl} target="_blank" rel="noreferrer" onClick={() => log('whatsapp')}><MessageCircle /> WhatsApp</a>
+        <Button size="sm" variant="whatsapp" asChild>
+          <a href={waUrl} target="_blank" rel="noreferrer" onClick={() => log('whatsapp')}><WhatsAppIcon className="size-4" /> WhatsApp</a>
         </Button>
       )}
       {tel && (

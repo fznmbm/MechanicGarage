@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { BellRing, BellOff, ShieldCheck, Wrench, Lightbulb, ThumbsDown } from 'lucide-react';
+import { BellRing, BellOff, ShieldCheck, Wrench, Lightbulb, ThumbsDown, Send, Settings } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { PageHeader } from '@/components/page-header';
@@ -16,6 +17,8 @@ import type { MotTest } from '@/lib/vehicle-lookup';
 import { cn } from '@/lib/utils';
 import { ReminderButtons } from './reminder-buttons';
 import { DeclinedWork } from './declined';
+import { loadSendList } from './send-data';
+import { SendList } from './send-list';
 
 export const metadata = { title: 'Reminders' };
 
@@ -37,6 +40,8 @@ export default async function RemindersPage({ searchParams }: { searchParams: Pr
   const { tab } = await searchParams;
   const kind: ReminderKind = tab === 'service' || tab === 'advisory' ? tab : 'mot';
   const declined = tab === 'declined';
+  const toSend = !tab || tab === 'send';
+  const sendData = await loadSendList(m.garage_id);
   const today = ukToday();
   const from = addDays(today, -30);
   const to = addDays(today, 60);
@@ -44,7 +49,7 @@ export default async function RemindersPage({ searchParams }: { searchParams: Pr
 
   const sel = 'id, registration, make, model, mot_due, service_due, mot_history, customer:customers(id, name, phone, reminder_consent)';
   const [{ data: garage }, vehiclesRes, { data: logs }] = await Promise.all([
-    sb.from('garages').select('name, phone, slug, custom_domain, online_booking_enabled').eq('id', m.garage_id).single(),
+    sb.from('garages').select('name, phone, slug, custom_domain, online_booking_enabled, msg_mot, msg_service, msg_advisory').eq('id', m.garage_id).single(),
     kind === 'mot'
       ? sb.from('vehicles').select(sel).eq('garage_id', m.garage_id).gte('mot_due', from).lte('mot_due', to).order('mot_due').limit(200)
       : kind === 'service'
@@ -70,16 +75,44 @@ export default async function RemindersPage({ searchParams }: { searchParams: Pr
       <PageHeader title="Reminders" description="Customers to contact. Tapping WhatsApp or Call records that you’ve reminded them." />
 
       <div className="flex flex-wrap gap-1.5">
-        {[...TABS, { key: 'declined', label: 'Declined work', icon: ThumbsDown }].map((t) => (
-          <Link key={t.key} href={`/reminders?tab=${t.key}`}
-            className={cn('flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium',
-              (declined ? t.key === 'declined' : kind === t.key) ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-accent')}>
-            <t.icon className="size-4" /> {t.label}
-          </Link>
-        ))}
+        {[{ key: 'send', label: 'To send', icon: Send }, ...TABS, { key: 'declined', label: 'Declined work', icon: ThumbsDown }].map((t) => {
+          const active = toSend ? t.key === 'send' : declined ? t.key === 'declined' : kind === t.key;
+          return (
+            <Link key={t.key} href={`/reminders?tab=${t.key}`}
+              className={cn('flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium',
+                active ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-accent')}>
+              <t.icon className="size-4" /> {t.label}
+              {t.key === 'send' && sendData.waiting > 0 && (
+                <span className={cn('rounded-full px-1.5 text-xs tabular-nums', active ? 'bg-primary-foreground/20' : 'bg-[#25D366] text-[#052e16]')}>{sendData.waiting}</span>
+              )}
+            </Link>
+          );
+        })}
       </div>
 
-      {declined ? <DeclinedWork garageId={m.garage_id} garageName={garage?.name ?? ''} bookUrl={bookUrl} /> : (
+      {toSend ? (
+        sendData.off ? (
+          <Card className="flex flex-col items-center gap-3 px-4 py-14 text-center">
+            <span className="flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary"><BellRing className="size-6" /></span>
+            <div>
+              <p className="font-medium">{sendData.off === 'disabled' ? 'Automatic reminders are switched off' : 'Reminders are set to email only'}</p>
+              <p className="text-sm text-muted-foreground">
+                {m.role === 'owner' ? 'Switch on WhatsApp reminders in Settings and customers due an MOT or service will appear here each day.' : 'Ask the owner to switch on WhatsApp reminders in Settings.'}
+              </p>
+            </div>
+            {m.role === 'owner' && <Button asChild><Link href="/settings?tab=reminders"><Settings /> Reminder settings</Link></Button>}
+          </Card>
+        ) : (
+          <>
+            <SendList items={sendData.items} sent={sendData.sent} desktopHint />
+            {sendData.noConsent > 0 && (
+              <p className="text-center text-xs text-muted-foreground">
+                {sendData.noConsent} more customer{sendData.noConsent === 1 ? ' is' : 's are'} due but {sendData.noConsent === 1 ? 'hasn’t' : 'haven’t'} agreed to reminders or {sendData.noConsent === 1 ? 'has' : 'have'} no mobile number. See the <Link href="/reminders?tab=mot" className="underline underline-offset-4">MOT due</Link> list.
+              </p>
+            )}
+          </>
+        )
+      ) : declined ? <DeclinedWork garageId={m.garage_id} garageName={garage?.name ?? ''} bookUrl={bookUrl} /> : (
 
       <Card className="gap-0 py-0">
         {rows.length ? (
@@ -91,6 +124,7 @@ export default async function RemindersPage({ searchParams }: { searchParams: Pr
               const msg = reminderMessage({
                 kind, firstName: c.name.split(' ')[0], garage: garage?.name ?? '', phone: garage?.phone ?? null,
                 registration: v.registration, make: v.make, due, bookUrl, overdue: !!due && due < today, advisories: adv,
+                template: garage?.[`msg_${kind}` as 'msg_mot'],
               });
               const wa = whatsappLink(c.phone);
               const l = last.get(v.id);

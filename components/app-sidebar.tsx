@@ -29,6 +29,7 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
@@ -44,6 +45,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { GarageLogo } from "@/components/garage-logo";
+import { InstallApp } from "@/components/install-app";
 
 type Role = "owner" | "reception" | "mechanic";
 type Feature = "courtesy";
@@ -122,8 +124,11 @@ export function AppSidebar({
   signOut,
   isAdmin = false,
   features = [],
+  badges = {},
 }: {
   features?: Feature[];
+  /** small counts next to menu items, e.g. reminders waiting to be sent */
+  badges?: Record<string, number>;
   garage: { name: string; logo_url: string | null };
   user: { name: string; email: string; role: Role };
   signOut: () => Promise<void>;
@@ -189,6 +194,14 @@ export function AppSidebar({
                         <span>{item.label}</span>
                       </Link>
                     </SidebarMenuButton>
+                    {badges[item.href] ? (
+                      <SidebarMenuBadge
+                        className="rounded-full bg-[#25D366] text-[#052e16] peer-data-[active=true]/menu-button:text-[#052e16]"
+                        aria-label={`${badges[item.href]} to send`}
+                      >
+                        {badges[item.href]}
+                      </SidebarMenuBadge>
+                    ) : null}
                   </SidebarMenuItem>
                 ))}
               </SidebarMenu>
@@ -199,6 +212,9 @@ export function AppSidebar({
 
       <SidebarFooter>
         <SidebarMenu>
+          <SidebarMenuItem>
+            <InstallApp variant="menu" name={garage.name} />
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

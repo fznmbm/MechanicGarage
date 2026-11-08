@@ -1,7 +1,8 @@
 import Link from 'next/link';
+import { WhatsAppIcon } from '@/components/whatsapp-icon';
 import { notFound } from 'next/navigation';
 import {
-  ChevronLeft, Pencil, Trash2, Phone, MessageCircle, CheckCircle2, UserX, XCircle, ThumbsUp, Clock, MapPin, Wrench, User,
+  ChevronLeft, Pencil, Trash2, Phone, CheckCircle2, UserX, XCircle, ThumbsUp, Clock, MapPin, Wrench, User,
   CalendarDays, Undo2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -191,9 +192,9 @@ export default async function BookingPage({
                       </Button>
                     )}
                     {wa && active && (
-                      <Button size="sm" variant="outline" asChild>
+                      <Button size="sm" variant="whatsapp" asChild>
                         <a href={`${wa}?text=${encodeURIComponent(msg)}`} target="_blank" rel="noreferrer">
-                          <MessageCircle /> Send confirmation
+                          <WhatsAppIcon className="size-4" /> Send confirmation
                         </a>
                       </Button>
                     )}

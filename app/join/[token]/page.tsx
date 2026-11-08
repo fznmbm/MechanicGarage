@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { privateMeta } from '@/lib/og';
 import { redirect } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -7,7 +8,7 @@ import { GarageLogo } from '@/components/garage-logo';
 import { BrandStyle } from '@/components/brand-style';
 import { createClient } from '@/lib/supabase/server';
 
-export const metadata = { title: 'Join your garage', robots: { index: false } };
+export const generateMetadata = () => privateMeta('Join your garage', 'Your staff invite', 'Tap to create your login and join the team.');
 
 type Info = { garage: string; slug: string; logo_url: string | null; brand_colour: string | null; role: string; display_name: string; email: string | null; expired: boolean; accepted: boolean };
 

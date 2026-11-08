@@ -22,7 +22,7 @@ const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.ge
 const longDate = (s: string) =>
   new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(`${s}T12:00:00`));
 
-export function BookingWizard({ garage, services, today }: { garage: BookingGarage; services: BookingService[]; today: string }) {
+export function BookingWizard({ garage, services, today, initialReg = '' }: { garage: BookingGarage; services: BookingService[]; today: string; initialReg?: string }) {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [service, setService] = useState<BookingService | null>(null);
   const [date, setDate] = useState<string | null>(null);
@@ -32,7 +32,7 @@ export function BookingWizard({ garage, services, today }: { garage: BookingGara
   const [sending, startSend] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [reference, setReference] = useState('');
-  const [form, setForm] = useState({ reg: '', name: '', phone: '', email: '', notes: '', consent: false, website: '' });
+  const [form, setForm] = useState({ reg: initialReg, name: '', phone: '', email: '', notes: '', consent: false, website: '' });
 
   // open days in the booking window
   const days = useMemo(() => {

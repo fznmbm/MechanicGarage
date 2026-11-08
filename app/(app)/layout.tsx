@@ -51,6 +51,12 @@ export default async function AppLayout({
       .maybeSingle(),
     sb.auth.getUser(),
   ]);
+  // WhatsApp reminders waiting to be sent (badge on Reminders); 0 before migration 17 is run
+  const { data: toSend } =
+    m.role === "mechanic"
+      ? { data: 0 }
+      : await sb.rpc("reminder_queue_count", { p_garage: m.garage_id });
+  const reminderCount = typeof toSend === "number" ? toSend : 0;
   // the garage requires two-factor for this role and it isn't set up yet
   if (
     (flags?.mfa_required_roles as string[] | undefined)?.includes(m.role) &&
@@ -77,6 +83,7 @@ export default async function AppLayout({
         user={{ name: m.display_name, email: m.email, role: m.role }}
         isAdmin={!!isAdmin}
         features={flags?.feature_courtesy_cars ? ["courtesy"] : []}
+        badges={reminderCount ? { "/reminders": reminderCount } : {}}
         signOut={signOut}
       />
       <SidebarInset>
@@ -125,7 +132,7 @@ export default async function AppLayout({
           </div>
         )}
         <div className="flex-1 p-4 pb-24 md:p-6">{children}</div>
-        <MobileNav />
+        <MobileNav alert={reminderCount > 0} />
       </SidebarInset>
     </SidebarProvider>
   );

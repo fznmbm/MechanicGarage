@@ -67,7 +67,8 @@ export default async function SettingsPage({
     },
     {
       value: 'reminders', label: 'Reminders', icon: <BellRing />,
-      content: <RemindersTab g={g} emailOn={emailConfigured()} cronOn={adminConfigured() && !!process.env.CRON_SECRET} />,
+      content: <RemindersTab g={g} emailOn={emailConfigured()} cronOn={adminConfigured() && !!process.env.CRON_SECRET}
+        bookUrl={g.online_booking_enabled ? garageLink(g, '/book') : null} />,
     },
     {
       value: 'features', label: 'Features', icon: <ToggleRight />,

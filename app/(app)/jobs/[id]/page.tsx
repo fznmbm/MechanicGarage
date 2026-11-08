@@ -1,7 +1,8 @@
 import Link from 'next/link';
+import { WhatsAppIcon } from '@/components/whatsapp-icon';
 import { notFound } from 'next/navigation';
 import {
-  ChevronLeft, Trash2, Phone, MessageCircle, Timer, Square, Play, Lightbulb, Plus, Camera, ClipboardList,
+  ChevronLeft, Trash2, Phone, Timer, Square, Play, Lightbulb, Plus, Camera, ClipboardList,
   Wrench, CalendarDays, Check, Receipt, ClipboardCheck, ThumbsUp, ExternalLink, Printer, PenLine, CarFront, Star,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -520,8 +521,8 @@ export default async function JobPage({
                       <Button size="sm" variant="outline" asChild><a href={`tel:${job.customer.phone.replace(/\s/g, '')}`}><Phone /> Call</a></Button>
                     )}
                     {wa && job.status === 'complete' && (
-                      <Button size="sm" variant="outline" asChild>
-                        <a href={`${wa}?text=${encodeURIComponent(readyMsg)}`} target="_blank" rel="noreferrer"><MessageCircle /> Ready to collect</a>
+                      <Button size="sm" variant="whatsapp" asChild>
+                        <a href={`${wa}?text=${encodeURIComponent(readyMsg)}`} target="_blank" rel="noreferrer"><WhatsAppIcon className="size-4" /> Ready to collect</a>
                       </Button>
                     )}
                   </div>

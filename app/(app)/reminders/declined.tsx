@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { MessageCircle, Phone, CalendarPlus, Check } from 'lucide-react';
+import { Phone, CalendarPlus, Check } from 'lucide-react';
+import { WhatsAppIcon } from '@/components/whatsapp-icon';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { RegPlate } from '@/components/reg-plate';
@@ -66,7 +67,7 @@ export async function DeclinedWork({ garageId, garageName, bookUrl }: { garageId
                 </ul>
               </div>
               <div className="flex flex-wrap gap-2">
-                {wa && <Button size="sm" variant="outline" asChild><a href={`${wa}?text=${encodeURIComponent(msg)}`} target="_blank" rel="noreferrer"><MessageCircle /> WhatsApp</a></Button>}
+                {wa && <Button size="sm" variant="whatsapp" asChild><a href={`${wa}?text=${encodeURIComponent(msg)}`} target="_blank" rel="noreferrer"><WhatsAppIcon className="size-4" /> WhatsApp</a></Button>}
                 {job.customer!.phone && <Button size="sm" variant="outline" asChild><a href={`tel:${job.customer!.phone.replace(/\s/g, '')}`}><Phone /> Call</a></Button>}
                 {job.vehicle && <Button size="sm" variant="outline" asChild><Link href={`/diary/new?vehicle=${job.vehicle.id}`}><CalendarPlus /> Book in</Link></Button>}
                 <form suppressHydrationWarning action={markDeclinedFollowedUp}>

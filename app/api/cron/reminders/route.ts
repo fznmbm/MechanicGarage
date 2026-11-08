@@ -4,6 +4,7 @@ import { garageLink } from '@/lib/garage-url';
 import { reminderEmail } from '@/lib/reminders';
 import { emailEstimateChase } from '@/lib/notify';
 import { ukDatePlus, ukToday } from '@/lib/time';
+import { waNumber } from '@/lib/phone';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -11,13 +12,15 @@ export const maxDuration = 60;
 type G = {
   id: string; name: string; slug: string; custom_domain: string | null; phone: string | null; email: string | null;
   brand_colour: string | null; online_booking_enabled: boolean; mot_reminder_days: number[]; service_reminder_days: number;
+  reminder_channel: 'whatsapp' | 'both' | 'email' | null;
 };
 type V = {
   id: string; registration: string; make: string | null; mot_due: string | null; service_due: string | null;
-  customer: { id: string; name: string; email: string | null; reminder_consent: boolean; unsubscribe_token: string } | null;
+  customer: { id: string; name: string; email: string | null; phone: string | null; reminder_consent: boolean; unsubscribe_token: string } | null;
 };
 
-/** Daily job (Vercel Cron): email MOT and service reminders to customers who opted in */
+/** Daily job (Vercel Cron): email MOT and service reminders to customers who opted in.
+    Customers with a mobile are on the garage's WhatsApp send list instead, unless it sends both. */
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET?.trim();
   if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) return new Response('Unauthorized', { status: 401 });
@@ -29,10 +32,17 @@ export async function GET(req: Request) {
   let sent = 0, failed = 0;
 
   const { data: garages } = await sb.from('garages')
-    .select('id, name, slug, custom_domain, phone, email, brand_colour, online_booking_enabled, mot_reminder_days, service_reminder_days')
+    .select('id, name, slug, custom_domain, phone, email, brand_colour, online_booking_enabled, mot_reminder_days, service_reminder_days, reminder_channel')
     .eq('reminders_enabled', true).in('plan_status', ['trial', 'active', 'comped']);
 
   for (const g of (garages ?? []) as G[]) {
+    // cars already booked in or in the workshop don't need a reminder
+    const [{ data: booked }, { data: open }] = await Promise.all([
+      sb.from('bookings').select('vehicle_id').eq('garage_id', g.id).in('status', ['booked', 'confirmed', 'arrived'])
+        .gte('starts_at', new Date(Date.now() - 12 * 3_600_000).toISOString()).not('vehicle_id', 'is', null).limit(2000),
+      sb.from('jobs').select('vehicle_id').eq('garage_id', g.id).not('status', 'in', '(complete,collected)').limit(2000),
+    ]);
+    const busy = new Set([...(booked ?? []), ...(open ?? [])].map((r) => r.vehicle_id as string));
     const stages = [...(g.mot_reminder_days ?? [30])].sort((a, b) => a - b);          // e.g. [7, 30]
     const maxMot = stages[stages.length - 1] ?? 30;
     const jobs: { kind: 'mot' | 'service'; col: 'mot_due' | 'service_due'; window: number }[] = [
@@ -42,14 +52,16 @@ export async function GET(req: Request) {
 
     for (const job of jobs) {
       const { data: vehicles } = await sb.from('vehicles')
-        .select('id, registration, make, mot_due, service_due, customer:customers(id, name, email, reminder_consent, unsubscribe_token)')
+        .select('id, registration, make, mot_due, service_due, customer:customers(id, name, email, phone, reminder_consent, unsubscribe_token)')
         .eq('garage_id', g.id).gte(job.col, today).lte(job.col, ukDatePlus(job.window)).limit(300);
 
       for (const v of (vehicles ?? []) as unknown as V[]) {
         if (Date.now() - started > 50_000) return Response.json({ ok: true, sent, failed, partial: true });
         const c = v.customer;
         const due = job.kind === 'mot' ? v.mot_due : v.service_due;
-        if (!c?.reminder_consent || !c.email || !due) continue;
+        if (!c?.reminder_consent || !c.email || !due || busy.has(v.id)) continue;
+        // WhatsApp garages: customers with a mobile are on the send list instead
+        if ((g.reminder_channel ?? 'whatsapp') === 'whatsapp' && waNumber(c.phone)) continue;
 
         // which reminder is this? the smallest "days before" bucket the due date now falls into
         const stage = job.kind === 'mot' ? stages.find((d) => due <= ukDatePlus(d)) ?? maxMot : job.window;

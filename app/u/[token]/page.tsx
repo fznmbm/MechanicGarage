@@ -1,10 +1,11 @@
 import { redirect } from 'next/navigation';
+import { privateMeta } from '@/lib/og';
 import { BellOff, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/server';
 
-export const metadata = { title: 'Stop reminders', robots: { index: false } };
+export const generateMetadata = () => privateMeta('Stop reminders', 'Reminder settings');
 
 async function unsubscribe(fd: FormData) {
   'use server';

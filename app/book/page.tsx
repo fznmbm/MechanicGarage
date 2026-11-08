@@ -1,4 +1,5 @@
 import { PRODUCT_NAME } from '@/lib/brand';
+import { shareMeta } from '@/lib/og';
 import { headers } from 'next/headers';
 import { MapPin, Phone } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -26,11 +27,21 @@ async function load(): Promise<Page | null> {
 
 export async function generateMetadata() {
   const page = await load();
-  return { title: page ? `Book online · ${page.garage.name}` : 'Book online' };
+  return {
+    title: page ? `Book online · ${page.garage.name}` : 'Book online',
+    ...(await shareMeta(page ? {
+      title: `Book your MOT or service with ${page.garage.name}`,
+      description: 'Choose a time online in under a minute. No account needed.',
+      image: 'book',
+      path: '/book',
+    } : {})),
+  };
 }
 
-export default async function BookPage() {
+export default async function BookPage({ searchParams }: { searchParams: Promise<{ reg?: string }> }) {
   const page = await load();
+  // reminder messages link here with the registration already filled in
+  const reg = ((await searchParams).reg ?? '').toUpperCase().replace(/[^A-Z0-9 ]/g, '').slice(0, 10);
   const g = page?.garage;
 
   return (
@@ -65,7 +76,7 @@ export default async function BookPage() {
             ) : (
               <>
                 {g.message && <p className="mb-5 rounded-lg bg-primary/5 p-3 text-sm">{g.message}</p>}
-                <BookingWizard garage={g} services={page!.services} today={ukToday()} />
+                <BookingWizard garage={g} services={page!.services} today={ukToday()} initialReg={reg} />
               </>
             )}
           </CardContent>

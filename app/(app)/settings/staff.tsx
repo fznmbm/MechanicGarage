@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Loader2, UserPlus, Copy, Check, MessageCircle, Trash2, ShieldCheck, Headset, Wrench } from 'lucide-react';
+import { Loader2, UserPlus, Copy, Check, Trash2, ShieldCheck, Headset, Wrench } from 'lucide-react';
+import { WhatsAppIcon } from '@/components/whatsapp-icon';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -72,8 +73,8 @@ function InviteRow({ i, origin, garage }: { i: Invite; origin: string; garage: s
         try { await navigator.clipboard.writeText(link); setCopied(true); toast.success('Invite link copied'); setTimeout(() => setCopied(false), 2000); }
         catch { toast.error('Could not copy the link'); }
       }}>{copied ? <Check /> : <Copy />} Copy link</Button>
-      <Button variant="outline" size="sm" asChild>
-        <a href={`https://wa.me/?text=${encodeURIComponent(msg)}`} target="_blank" rel="noreferrer"><MessageCircle /> WhatsApp</a>
+      <Button variant="whatsapp" size="sm" asChild>
+        <a href={`https://wa.me/?text=${encodeURIComponent(msg)}`} target="_blank" rel="noreferrer"><WhatsAppIcon className="size-4" /> WhatsApp</a>
       </Button>
       <form suppressHydrationWarning action={revokeInvite}>
         <input suppressHydrationWarning type="hidden" name="id" value={i.id} />

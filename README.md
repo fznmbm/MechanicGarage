@@ -7,7 +7,7 @@ Next.js 16 · Tailwind 4 · shadcn/ui (Radix) · Supabase · Vercel
 
 1. `npm install`
 2. Copy `.env.example` to `.env.local` and fill in your Supabase URL and publishable (anon) key.
-3. In Supabase → SQL editor, run every file in `supabase/` in number order (01 to 16).
+3. In Supabase → SQL editor, run every file in `supabase/` in number order (01 to 17).
    Each is run once; skip any you have already run.
 4. Supabase → Authentication → Providers → Email: turn off "Confirm email" for development.
 5. `npm run dev` and open http://localhost:3000 → "Create an account" → set up your garage.
@@ -53,6 +53,26 @@ Settings → Online booking: add the services customers can book, then switch it
 The booking page is `https://<garage>.<your-domain>/book` (locally: `/book?garage=<slug>`).
 Slots come from the opening hours, open days and bays in Settings → Workshop.
 
+## WhatsApp reminders (send list)
+
+Run `supabase/17_whatsapp_reminders.sql`. Each garage switches reminders on in Settings → Reminders and
+chooses how to send: **WhatsApp** (recommended), **WhatsApp and email**, or **Email only**.
+
+- Every day, customers with an MOT or service coming up (and an MOT that ran out in the last 30 days) appear
+  on Reminders → To send, with a count on the menu and the dashboard. No server setup is needed for this.
+- Staff press **Start sending**: each customer's message opens in WhatsApp ready to send, then the next one.
+  Each reminder can be sent once; it then shows as sent (with an Undo for 30 minutes).
+- Only customers who agreed to reminders and have a mobile number are included; cars already booked in or in
+  the workshop are skipped.
+- The wording is editable in Settings → Reminders, with a live preview.
+
+## Installable app and link previews
+
+Every garage address can be installed as an app (Android: Install app; iPhone: Share → Add to Home Screen)
+with the garage's name, logo and colour. Links shared on WhatsApp and elsewhere show a preview card with the
+garage's details; invoice, estimate and approval links never show the customer, car or amount.
+No setup needed. Logos look best as a square PNG.
+
 ## Automatic reminder emails
 
 Needs three things on the server (Vercel → Settings → Environment Variables):
@@ -63,8 +83,8 @@ Needs three things on the server (Vercel → Settings → Environment Variables)
 
 `vercel.json` runs the job once a day at 08:00 UTC, which the free Hobby plan allows.
 Each garage switches reminders on in Settings → Reminders. Only customers who agreed are emailed,
-and every email has an unsubscribe link. Without this setup, the Reminders page still gives
-one-tap WhatsApp reminders.
+and every email has an unsubscribe link. With "WhatsApp" chosen, only customers without a mobile number
+are emailed. Without this setup, the WhatsApp send list still works.
 
 ## Estimates
 

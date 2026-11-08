@@ -1,9 +1,10 @@
 import { notFound } from 'next/navigation';
+import { privateMeta } from '@/lib/og';
 import { createClient } from '@/lib/supabase/server';
 import { PRODUCT_NAME, safeColour } from '@/lib/brand';
 import { FeedbackForm } from './feedback-form';
 
-export const metadata = { title: 'How did we do?', robots: { index: false, follow: false } };
+export const generateMetadata = () => privateMeta('How did we do?', 'A quick question', 'How did we do? It takes ten seconds.');
 
 type Page = {
   garage: { name: string; logo_url: string | null; brand_colour: string | null; phone: string | null; google_review_url: string | null };

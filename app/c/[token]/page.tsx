@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { privateMeta } from '@/lib/og';
 import { Download, Phone, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { InvoiceDocument } from '@/components/invoice-document';
@@ -7,10 +8,7 @@ import { loadPublicCredit } from '@/app/(app)/invoices/data';
 
 export async function generateMetadata({ params }: { params: Promise<{ token: string }> }) {
   const doc = await loadPublicCredit((await params).token);
-  return {
-    title: doc ? `Credit note ${doc.invoice.number} · ${doc.invoice.seller.name}` : 'Credit note',
-    robots: { index: false, follow: false },
-  };
+  return privateMeta(doc ? `Credit note ${doc.invoice.number} · ${doc.invoice.seller.name}` : 'Credit note', 'Your credit note');
 }
 
 export default async function PublicCreditPage({ params }: { params: Promise<{ token: string }> }) {

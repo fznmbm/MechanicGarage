@@ -6,6 +6,7 @@ import { getMembership } from '@/lib/tenant';
 import { orNull, str } from '@/lib/validate';
 import { parsePounds } from '@/lib/money';
 import type { ActionState } from '@/lib/types';
+import { DEFAULT_MESSAGES } from '@/lib/reminders';
 
 const oops = (message: string): ActionState => ({ ok: false, message, ts: Date.now() });
 const done = (message: string): ActionState => ({ ok: true, message, ts: Date.now() });
@@ -78,14 +79,28 @@ export async function saveReminderSettings(_: ActionState, fd: FormData): Promis
   if (!Number.isInteger(first) || first < 7 || first > 60) errors.mot_first = 'Between 7 and 60 days';
   if (!Number.isInteger(second) || second < 0 || second >= first) errors.mot_second = 'Must be fewer days than the first reminder (0 to skip)';
   if (!Number.isInteger(service) || service < 1 || service > 60) errors.service_reminder_days = 'Between 1 and 60 days';
+  // message wording: saved only when it differs from ours, so improvements to the built-in wording reach everyone else
+  const msgs: Record<string, string | null> = {};
+  for (const k of ['mot', 'service', 'advisory'] as const) {
+    const raw = fd.get(`msg_${k}`);
+    if (raw == null) continue;
+    const t = String(raw).replace(/\r/g, '').trim();
+    if (t.length > 1000) errors[`msg_${k}`] = 'Keep it under 1000 characters';
+    else if (!t) errors[`msg_${k}`] = 'The message can’t be empty (use “Use our wording” to reset it)';
+    msgs[`msg_${k}`] = t === DEFAULT_MESSAGES[k] ? null : t;
+  }
   if (Object.keys(errors).length) return fail(errors);
+  const channel = String(fd.get('reminder_channel') ?? '');
 
   const { error } = await c.sb.from('garages').update({
     reminders_enabled: fd.get('reminders_enabled') === 'on',
     mot_reminder_days: second > 0 ? [first, second] : [first],
     service_reminder_days: service,
+    ...(['whatsapp', 'both', 'email'].includes(channel) ? { reminder_channel: channel } : {}),
+    ...msgs,
   }).eq('id', c.m.garage_id);
   if (error) return oops(error.message);
   revalidatePath('/settings');
+  revalidatePath('/reminders');
   return done('Reminder settings saved');
 }

@@ -35,6 +35,10 @@ export async function proxy(req: NextRequest) {
   if (tenant.slug) headers.set('x-garage-slug', tenant.slug);
   if (tenant.host) headers.set('x-garage-host', tenant.host);
 
+  // app icons, manifest, link-preview images and the service worker: public, no sign-in check needed
+  const p = req.nextUrl.pathname;
+  if (p.startsWith('/brand/') || p === '/sw.js') return NextResponse.next({ request: { headers } });
+
   let res = NextResponse.next({ request: { headers } });
 
   const supabase = createServerClient(

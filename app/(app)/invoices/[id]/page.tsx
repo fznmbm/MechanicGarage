@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { ChevronLeft, Download, FileText, MessageCircle, Mail, Wrench, Trash2, Info, ExternalLink, FileMinus2 } from 'lucide-react';
+import { ChevronLeft, Download, FileText, Mail, Wrench, Trash2, Info, ExternalLink, FileMinus2 } from 'lucide-react';
+import { WhatsAppIcon } from '@/components/whatsapp-icon';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -146,8 +147,8 @@ export default async function InvoicePage({
               )}
               <div className="flex flex-wrap gap-2">
                 {wa && (
-                  <Button variant="outline" size="sm" asChild>
-                    <a href={`${wa}?text=${encodeURIComponent(waText)}`} target="_blank" rel="noreferrer"><MessageCircle /> WhatsApp</a>
+                  <Button variant="whatsapp" size="sm" asChild>
+                    <a href={`${wa}?text=${encodeURIComponent(waText)}`} target="_blank" rel="noreferrer"><WhatsAppIcon className="size-4" /> WhatsApp</a>
                   </Button>
                 )}
                 <CopyLink url={link} />

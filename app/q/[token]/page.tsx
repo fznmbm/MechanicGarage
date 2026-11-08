@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { privateMeta } from '@/lib/og';
 import { Download, Phone, Mail, CheckCircle2, CalendarPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { InvoiceDocument } from '@/components/invoice-document';
@@ -10,7 +11,8 @@ import { RespondForm } from './respond';
 
 export async function generateMetadata({ params }: { params: Promise<{ token: string }> }) {
   const doc = await loadPublicEstimate((await params).token);
-  return { title: doc ? `Estimate ${doc.invoice.number} · ${doc.invoice.seller.name}` : 'Estimate', robots: { index: false, follow: false } };
+  return privateMeta(doc ? `Estimate ${doc.invoice.number} · ${doc.invoice.seller.name}` : 'Estimate', 'Your estimate',
+    'Tap to view the work and prices, and accept online. Only people with this link can see it.');
 }
 
 export default async function PublicEstimatePage({ params }: { params: Promise<{ token: string }> }) {

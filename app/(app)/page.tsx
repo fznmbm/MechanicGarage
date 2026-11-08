@@ -9,6 +9,8 @@ import { getMembership } from '@/lib/tenant';
 import { ukDatePlus, ukDayRange, ukHour, ukTime, ukToday } from '@/lib/time';
 import { gbp } from '@/lib/format';
 import { BOOKING_STATUS, JOB_STATUS, type JobStatus } from '@/lib/status';
+import { WhatsAppIcon } from '@/components/whatsapp-icon';
+import { InstallApp } from '@/components/install-app';
 
 export const metadata = { title: 'Dashboard' };
 
@@ -29,7 +31,7 @@ export default async function Dashboard() {
   const in30 = ukDatePlus(30);
   const seesMoney = m.role !== 'mechanic';
 
-  const [bookingsRes, jobs, unpaid, motDue] = await Promise.all([
+  const [bookingsRes, jobs, unpaid, motDue, toSend] = await Promise.all([
     sb.from('bookings')
       .select('id, starts_at, service_type, status, vehicle:vehicles(registration, make, model), customer:customers(name)')
       .eq('garage_id', m.garage_id).neq('status', 'cancelled')
@@ -41,7 +43,9 @@ export default async function Dashboard() {
       : Promise.resolve({ data: [] as { total_pence: number }[] }),
     sb.from('vehicles').select('id', { count: 'exact', head: true })
       .eq('garage_id', m.garage_id).gte('mot_due', today).lte('mot_due', in30),
+    seesMoney ? sb.rpc('reminder_queue_count', { p_garage: m.garage_id }) : Promise.resolve({ data: 0 }),
   ]);
+  const remindersWaiting = typeof toSend.data === 'number' ? toSend.data : 0;
 
   const bookings = (bookingsRes.data ?? []) as unknown as TodayBooking[];
   const statusCounts = (jobs.data ?? []).reduce<Record<string, number>>((acc, j) => {
@@ -80,6 +84,23 @@ export default async function Dashboard() {
           <Button asChild><Link href="/jobs/new"><Plus /> New job</Link></Button>
         </div>
       </div>
+
+      <InstallApp variant="banner" name={m.garage.name} />
+
+      {remindersWaiting > 0 && (
+        <Card className="flex-row flex-wrap items-center gap-4 border-[#25D366]/40 bg-[#25D366]/5 px-4 py-4 sm:px-6">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[#25D366]/15 text-[#128C7E]">
+            <WhatsAppIcon className="size-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-medium">{remindersWaiting} reminder{remindersWaiting === 1 ? '' : 's'} ready to send</p>
+            <p className="text-sm text-muted-foreground">MOT and service reminders for today. Takes a minute on WhatsApp.</p>
+          </div>
+          <Button variant="whatsapp" asChild className="w-full sm:w-auto">
+            <Link href="/reminders?tab=send"><WhatsAppIcon className="size-4" /> Send reminders</Link>
+          </Button>
+        </Card>
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         {kpis.map((k) => (

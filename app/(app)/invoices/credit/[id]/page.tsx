@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { ChevronLeft, Download, FileText, MessageCircle, Mail, Receipt, ExternalLink } from 'lucide-react';
+import { ChevronLeft, Download, FileText, Mail, Receipt, ExternalLink } from 'lucide-react';
+import { WhatsAppIcon } from '@/components/whatsapp-icon';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/components/page-header';
@@ -80,8 +81,8 @@ export default async function CreditNotePage({
               )}
               <div className="flex flex-wrap gap-2">
                 {wa && (
-                  <Button variant="outline" size="sm" asChild>
-                    <a href={`${wa}?text=${encodeURIComponent(waText)}`} target="_blank" rel="noreferrer"><MessageCircle /> WhatsApp</a>
+                  <Button variant="whatsapp" size="sm" asChild>
+                    <a href={`${wa}?text=${encodeURIComponent(waText)}`} target="_blank" rel="noreferrer"><WhatsAppIcon className="size-4" /> WhatsApp</a>
                   </Button>
                 )}
                 <CopyLink url={link} />

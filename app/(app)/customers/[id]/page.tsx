@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ChevronLeft, Phone, Mail, MessageCircle, Plus, Trash2, Car, BellRing, BellOff } from 'lucide-react';
+import { ChevronLeft, Phone, Mail, Plus, Trash2, Car, BellRing, BellOff } from 'lucide-react';
+import { WhatsAppIcon } from '@/components/whatsapp-icon';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -73,7 +74,7 @@ export default async function CustomerPage({
         actions={
           <>
             {c.phone && <Button variant="outline" asChild><a href={`tel:${c.phone.replace(/\s/g, '')}`}><Phone /> Call</a></Button>}
-            {wa && <Button variant="outline" asChild><a href={wa} target="_blank" rel="noreferrer"><MessageCircle /> WhatsApp</a></Button>}
+            {wa && <Button variant="whatsapp" asChild><a href={wa} target="_blank" rel="noreferrer"><WhatsAppIcon className="size-4" /> WhatsApp</a></Button>}
             {c.email && <Button variant="outline" asChild><a href={`mailto:${c.email}`}><Mail /> Email</a></Button>}
           </>
         }

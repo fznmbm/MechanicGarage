@@ -1,6 +1,7 @@
 'use client';
 
-import { Loader2, Send, Copy, MessageCircle } from 'lucide-react';
+import { Loader2, Send, Copy } from 'lucide-react';
+import { WhatsAppIcon } from '@/components/whatsapp-icon';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,7 +28,7 @@ export function ShareButtons({ id, link, whatsapp }: { id: string; link: string;
     <form suppressHydrationWarning action={markEstimateSent} className="flex flex-wrap gap-2">
       <input type="hidden" name="id" value={id} />
       {whatsapp && (
-        <Button type="submit" size="sm" variant="outline" onClick={() => window.open(whatsapp, '_blank', 'noopener')}><MessageCircle /> WhatsApp</Button>
+        <Button type="submit" size="sm" variant="whatsapp" onClick={() => window.open(whatsapp, '_blank', 'noopener')}><WhatsAppIcon className="size-4" /> WhatsApp</Button>
       )}
       <Button type="submit" size="sm" variant="outline" onClick={() => {
         navigator.clipboard.writeText(link).then(() => toast.success('Link copied'), () => toast.error('Could not copy the link'));

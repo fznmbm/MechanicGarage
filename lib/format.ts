@@ -1,3 +1,5 @@
+import { waNumber } from './phone';
+
 export const gbp = (pence: number) =>
   new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(pence / 100);
 
@@ -10,10 +12,8 @@ export const miles = (n?: number | null) => (n == null ? '—' : `${n.toLocaleSt
 export const initials = (name: string) =>
   name.split(/\s+/).filter(Boolean).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
 
-/** UK number → WhatsApp link (07… → 447…) */
+/** Mobile number → WhatsApp chat link (07… → 447…); null for landlines, which aren't on WhatsApp */
 export const whatsappLink = (phone?: string | null) => {
-  if (!phone) return null;
-  let d = phone.replace(/\D/g, '');
-  if (d.startsWith('0')) d = `44${d.slice(1)}`;
-  return d.length >= 11 ? `https://wa.me/${d}` : null;
+  const n = waNumber(phone);
+  return n ? `https://wa.me/${n}` : null;
 };

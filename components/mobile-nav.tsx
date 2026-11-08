@@ -13,7 +13,7 @@ const TABS = [
   { href: "/vehicles", label: "Vehicles", icon: Car },
 ];
 
-export function MobileNav() {
+export function MobileNav({ alert = false }: { alert?: boolean }) {
   const pathname = usePathname();
   const { openMobile, setOpenMobile } = useSidebar();
   const isActive = (href: string) =>
@@ -49,7 +49,12 @@ export function MobileNav() {
             openMobile ? "text-primary" : "text-muted-foreground",
           )}
         >
-          <Menu className="size-5" />
+          <span className="relative">
+            <Menu className="size-5" />
+            {alert && (
+              <span className="absolute -top-0.5 -right-1 size-2.5 rounded-full border-2 border-background bg-[#25D366]" />
+            )}
+          </span>
           Menu
         </button>
       </div>
