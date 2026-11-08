@@ -1,5 +1,5 @@
-import 'server-only';
-import { normaliseReg } from './reg';
+import "server-only";
+import { normaliseReg } from "./reg";
 
 /* =====================================================================
    Vehicle lookup
@@ -12,11 +12,11 @@ import { normaliseReg } from './reg';
 export type MotDefect = { text: string; type: string; dangerous?: boolean };
 
 export type MotTest = {
-  completedDate: string;          // ISO
-  result: 'PASSED' | 'FAILED' | string;
-  expiryDate?: string | null;     // YYYY-MM-DD
+  completedDate: string; // ISO
+  result: "PASSED" | "FAILED" | string;
+  expiryDate?: string | null; // YYYY-MM-DD
   odometer?: number | null;
-  odometerUnit?: 'mi' | 'km' | null;
+  odometerUnit?: "mi" | "km" | null;
   testNumber?: string | null;
   defects: MotDefect[];
 };
@@ -36,45 +36,76 @@ export type VehicleLookup = {
   lastMileage: number | null;
   hasOutstandingRecall: boolean | null;
   motTests: MotTest[];
-  sources: ('dvsa' | 'dvla')[];
+  sources: ("dvsa" | "dvla")[];
 };
 
 export type LookupResult =
   | { ok: true; vehicle: VehicleLookup }
-  | { ok: false; code: 'not_configured' | 'not_found' | 'invalid' | 'rate_limited' | 'error'; message: string };
+  | {
+      ok: false;
+      code:
+        | "not_configured"
+        | "not_found"
+        | "invalid"
+        | "rate_limited"
+        | "error";
+      message: string;
+    };
 
-const env = (k: string) => process.env[k]?.trim() || '';
+const env = (k: string) => process.env[k]?.trim() || "";
 
 export const dvsaConfigured = () =>
-  !!(env('DVSA_CLIENT_ID') && env('DVSA_CLIENT_SECRET') && env('DVSA_API_KEY') && env('DVSA_TOKEN_URL'));
-export const dvlaConfigured = () => !!env('DVLA_API_KEY');
+  !!(
+    env("DVSA_CLIENT_ID") &&
+    env("DVSA_CLIENT_SECRET") &&
+    env("DVSA_API_KEY") &&
+    env("DVSA_TOKEN_URL")
+  );
+export const dvlaConfigured = () => !!env("DVLA_API_KEY");
 export const lookupConfigured = () => dvsaConfigured() || dvlaConfigured();
 
 const title = (s?: string | null) =>
-  s ? s.toLowerCase().replace(/\b([a-z])/g, (c) => c.toUpperCase()).replace(/\bBmw\b|\bVw\b|\bMg\b|\bDs\b/g, (m) => m.toUpperCase()) : null;
+  s
+    ? s
+        .toLowerCase()
+        .replace(/\b([a-z])/g, (c) => c.toUpperCase())
+        .replace(/\bBmw\b|\bVw\b|\bMg\b|\bDs\b/g, (m) => m.toUpperCase())
+    : null;
 
 /* ---------------- DVSA (OAuth2 client credentials) ---------------- */
 
 let tokenCache: { token: string; expires: number } | null = null;
 
 async function dvsaToken(): Promise<string> {
-  if (tokenCache && tokenCache.expires > Date.now() + 60_000) return tokenCache.token;
+  if (tokenCache && tokenCache.expires > Date.now() + 60_000)
+    return tokenCache.token;
   const body = new URLSearchParams({
-    grant_type: 'client_credentials',
-    client_id: env('DVSA_CLIENT_ID'),
-    client_secret: env('DVSA_CLIENT_SECRET'),
-    scope: env('DVSA_SCOPE') || 'https://tapi.dvsa.gov.uk/.default',
+    grant_type: "client_credentials",
+    client_id: env("DVSA_CLIENT_ID"),
+    client_secret: env("DVSA_CLIENT_SECRET"),
+    scope: env("DVSA_SCOPE") || "https://tapi.dvsa.gov.uk/.default",
   });
-  const res = await fetch(env('DVSA_TOKEN_URL'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  const res = await fetch(env("DVSA_TOKEN_URL"), {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
-    cache: 'no-store',
+    cache: "no-store",
     signal: AbortSignal.timeout(8000),
   });
-  if (!res.ok) throw new Error(`DVSA token request failed (${res.status})`);
-  const json = (await res.json()) as { access_token: string; expires_in: number };
-  tokenCache = { token: json.access_token, expires: Date.now() + json.expires_in * 1000 };
+  // the sign-in service explains what's wrong (e.g. "AADSTS7000222: client secret has expired")
+  if (!res.ok)
+    throw new Error(
+      `DVSA token request failed (${res.status}): ${(await res.text()).slice(0, 300)}`,
+    );
+
+  const json = (await res.json()) as {
+    access_token: string;
+    expires_in: number;
+  };
+  tokenCache = {
+    token: json.access_token,
+    expires: Date.now() + json.expires_in * 1000,
+  };
   return json.access_token;
 }
 
@@ -103,19 +134,34 @@ type DvsaVehicle = {
   }[];
 };
 
-async function fromDvsa(reg: string): Promise<{ status: number; data?: DvsaVehicle }> {
+async function fromDvsa(
+  reg: string,
+): Promise<{ status: number; data?: DvsaVehicle }> {
   const call = async () =>
-    fetch(`${env('DVSA_API_BASE') || 'https://history.mot.api.gov.uk'}/v1/trade/vehicles/registration/${encodeURIComponent(reg)}`, {
-      headers: { Authorization: `Bearer ${await dvsaToken()}`, 'X-API-Key': env('DVSA_API_KEY'), Accept: 'application/json' },
-      cache: 'no-store',
-      signal: AbortSignal.timeout(10000),
-    });
+    fetch(
+      `${env("DVSA_API_BASE") || "https://history.mot.api.gov.uk"}/v1/trade/vehicles/registration/${encodeURIComponent(reg)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${await dvsaToken()}`,
+          "X-API-Key": env("DVSA_API_KEY"),
+          Accept: "application/json",
+        },
+        cache: "no-store",
+        signal: AbortSignal.timeout(10000),
+      },
+    );
   let res = await call();
   if (res.status === 401) {
     tokenCache = null; // token expired or revoked: retry once with a fresh one
     res = await call();
   }
-  if (!res.ok) return { status: res.status };
+  if (!res.ok) {
+    if (res.status !== 404)
+      console.error(
+        `DVSA lookup failed (${res.status}): ${(await res.text()).slice(0, 300)}`,
+      );
+    return { status: res.status };
+  }
   return { status: 200, data: (await res.json()) as DvsaVehicle };
 }
 
@@ -133,34 +179,55 @@ type DvlaVehicle = {
   taxDueDate?: string;
 };
 
-async function fromDvla(reg: string): Promise<{ status: number; data?: DvlaVehicle }> {
-  const res = await fetch('https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles', {
-    method: 'POST',
-    headers: { 'x-api-key': env('DVLA_API_KEY'), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ registrationNumber: reg }),
-    cache: 'no-store',
-    signal: AbortSignal.timeout(8000),
-  });
+async function fromDvla(
+  reg: string,
+): Promise<{ status: number; data?: DvlaVehicle }> {
+  const res = await fetch(
+    "https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles",
+    {
+      method: "POST",
+      headers: {
+        "x-api-key": env("DVLA_API_KEY"),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ registrationNumber: reg }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(8000),
+    },
+  );
   if (!res.ok) return { status: res.status };
   return { status: 200, data: (await res.json()) as DvlaVehicle };
 }
 
 /* ---------------- Normalise + merge ---------------- */
 
-const dateOnly = (s?: string | null) => (s ? s.slice(0, 10).replace(/\./g, '-') : null);
+const dateOnly = (s?: string | null) =>
+  s ? s.slice(0, 10).replace(/\./g, "-") : null;
 
 function mapTests(v?: DvsaVehicle): MotTest[] {
   return (v?.motTests ?? [])
     .map((t) => {
-      const odo = t.odometerResultType && t.odometerResultType !== 'READ' ? null : Number(t.odometerValue);
+      const odo =
+        t.odometerResultType && t.odometerResultType !== "READ"
+          ? null
+          : Number(t.odometerValue);
       return {
         completedDate: t.completedDate,
         result: t.testResult,
         expiryDate: dateOnly(t.expiryDate),
         odometer: Number.isFinite(odo) ? (odo as number) : null,
-        odometerUnit: t.odometerUnit?.toUpperCase() === 'KM' ? 'km' : t.odometerUnit ? 'mi' : null,
+        odometerUnit:
+          t.odometerUnit?.toUpperCase() === "KM"
+            ? "km"
+            : t.odometerUnit
+              ? "mi"
+              : null,
         testNumber: t.motTestNumber ?? null,
-        defects: (t.defects ?? []).map((d) => ({ text: d.text, type: d.type, dangerous: !!d.dangerous })),
+        defects: (t.defects ?? []).map((d) => ({
+          text: d.text,
+          type: d.type,
+          dangerous: !!d.dangerous,
+        })),
       } satisfies MotTest;
     })
     .sort((a, b) => b.completedDate.localeCompare(a.completedDate));
@@ -168,30 +235,71 @@ function mapTests(v?: DvsaVehicle): MotTest[] {
 
 export async function lookupVehicle(input: string): Promise<LookupResult> {
   const reg = normaliseReg(input);
-  if (!reg) return { ok: false, code: 'invalid', message: 'Enter a registration' };
+  if (!reg)
+    return { ok: false, code: "invalid", message: "Enter a registration" };
   if (!lookupConfigured()) {
-    return { ok: false, code: 'not_configured', message: 'Registration lookup is not set up yet. Enter the details manually.' };
+    return {
+      ok: false,
+      code: "not_configured",
+      message:
+        "Registration lookup is not set up yet. Enter the details manually.",
+    };
   }
 
   const [dvsa, dvla] = await Promise.all([
-    dvsaConfigured() ? fromDvsa(reg).catch(() => ({ status: 500 })) : Promise.resolve(null),
-    dvlaConfigured() ? fromDvla(reg).catch(() => ({ status: 500 })) : Promise.resolve(null),
+    dvsaConfigured()
+      ? fromDvsa(reg).catch((e) => {
+          console.error(
+            "DVSA lookup error:",
+            e instanceof Error ? e.message : e,
+          );
+          return { status: 500 };
+        })
+      : Promise.resolve(null),
+    dvlaConfigured()
+      ? fromDvla(reg).catch((e) => {
+          console.error(
+            "DVLA lookup error:",
+            e instanceof Error ? e.message : e,
+          );
+          return { status: 500 };
+        })
+      : Promise.resolve(null),
   ]);
 
-  const a = dvsa && 'data' in dvsa ? dvsa.data : undefined;
-  const b = dvla && 'data' in dvla ? dvla.data : undefined;
+  const a = dvsa && "data" in dvsa ? dvsa.data : undefined;
+  const b = dvla && "data" in dvla ? dvla.data : undefined;
 
   if (!a && !b) {
     const statuses = [dvsa?.status, dvla?.status].filter(Boolean) as number[];
-    if (statuses.includes(429)) return { ok: false, code: 'rate_limited', message: 'Too many lookups right now. Try again in a minute.' };
+    if (statuses.includes(429))
+      return {
+        ok: false,
+        code: "rate_limited",
+        message: "Too many lookups right now. Try again in a minute.",
+      };
     if (statuses.length && statuses.every((s) => s === 404 || s === 400)) {
-      return { ok: false, code: 'not_found', message: `No vehicle found for ${reg}. Check the registration or enter details manually.` };
+      return {
+        ok: false,
+        code: "not_found",
+        message: `No vehicle found for ${reg}. Check the registration or enter details manually.`,
+      };
     }
-    return { ok: false, code: 'error', message: 'The vehicle lookup service is not responding. Enter the details manually.' };
+    return {
+      ok: false,
+      code: "error",
+      message:
+        "The vehicle lookup service is not responding. Enter the details manually.",
+    };
   }
 
   const tests = mapTests(a);
-  const latestExpiry = tests.map((t) => t.expiryDate).filter(Boolean).sort().at(-1) ?? null;
+  const latestExpiry =
+    tests
+      .map((t) => t.expiryDate)
+      .filter(Boolean)
+      .sort()
+      .at(-1) ?? null;
   const lastReading = tests.find((t) => t.odometer != null);
   const year =
     Number(a?.manufactureYear) ||
@@ -212,14 +320,28 @@ export async function lookupVehicle(input: string): Promise<LookupResult> {
       yearOfManufacture: year,
       firstRegistered:
         dateOnly(a?.registrationDate ?? a?.firstUsedDate) ??
-        (b?.monthOfFirstRegistration ? `${b.monthOfFirstRegistration}-01` : null),
-      motDue: latestExpiry ?? dateOnly(a?.motTestDueDate) ?? dateOnly(b?.motExpiryDate),
+        (b?.monthOfFirstRegistration
+          ? `${b.monthOfFirstRegistration}-01`
+          : null),
+      motDue:
+        latestExpiry ??
+        dateOnly(a?.motTestDueDate) ??
+        dateOnly(b?.motExpiryDate),
       taxStatus: b?.taxStatus ?? null,
       taxDue: dateOnly(b?.taxDueDate),
-      lastMileage: lastReading?.odometerUnit === 'mi' ? lastReading.odometer ?? null : null,
-      hasOutstandingRecall: recall === undefined ? null : recall === true || String(recall).toLowerCase() === 'yes',
+      lastMileage:
+        lastReading?.odometerUnit === "mi"
+          ? (lastReading.odometer ?? null)
+          : null,
+      hasOutstandingRecall:
+        recall === undefined
+          ? null
+          : recall === true || String(recall).toLowerCase() === "yes",
       motTests: tests,
-      sources: [a ? 'dvsa' : null, b ? 'dvla' : null].filter(Boolean) as ('dvsa' | 'dvla')[],
+      sources: [a ? "dvsa" : null, b ? "dvla" : null].filter(Boolean) as (
+        | "dvsa"
+        | "dvla"
+      )[],
     },
   };
 }
