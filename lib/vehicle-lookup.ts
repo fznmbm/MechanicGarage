@@ -74,6 +74,22 @@ const title = (s?: string | null) =>
 
 /* ---------------- DVSA (OAuth2 client credentials) ---------------- */
 
+/** "fetch failed" hides the real reason (wrong address, DNS, TLS): say which address and why */
+function why(e: unknown, url: string) {
+  const err = e as {
+    message?: string;
+    name?: string;
+    cause?: { code?: string; message?: string };
+  };
+  let host = url;
+  try {
+    host = new URL(url).host;
+  } catch {
+    host = `not a valid address: "${url}"`;
+  }
+  return `${host} → ${err.name === "TimeoutError" ? "timed out" : [err.cause?.code, err.cause?.message ?? err.message].filter(Boolean).join(" ")}`;
+}
+
 let tokenCache: { token: string; expires: number } | null = null;
 
 async function dvsaToken(): Promise<string> {
@@ -85,12 +101,15 @@ async function dvsaToken(): Promise<string> {
     client_secret: env("DVSA_CLIENT_SECRET"),
     scope: env("DVSA_SCOPE") || "https://tapi.dvsa.gov.uk/.default",
   });
-  const res = await fetch(env("DVSA_TOKEN_URL"), {
+  const url = env("DVSA_TOKEN_URL");
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
     cache: "no-store",
     signal: AbortSignal.timeout(8000),
+  }).catch((e) => {
+    throw new Error(`DVSA sign-in (DVSA_TOKEN_URL) failed: ${why(e, url)}`);
   });
   // the sign-in service explains what's wrong (e.g. "AADSTS7000222: client secret has expired")
   if (!res.ok)
@@ -137,19 +156,21 @@ type DvsaVehicle = {
 async function fromDvsa(
   reg: string,
 ): Promise<{ status: number; data?: DvsaVehicle }> {
-  const call = async () =>
-    fetch(
-      `${env("DVSA_API_BASE") || "https://history.mot.api.gov.uk"}/v1/trade/vehicles/registration/${encodeURIComponent(reg)}`,
-      {
-        headers: {
-          Authorization: `Bearer ${await dvsaToken()}`,
-          "X-API-Key": env("DVSA_API_KEY"),
-          Accept: "application/json",
-        },
-        cache: "no-store",
-        signal: AbortSignal.timeout(10000),
+  const url = `${env("DVSA_API_BASE") || "https://history.mot.api.gov.uk"}/v1/trade/vehicles/registration/${encodeURIComponent(reg)}`;
+  const call = async () => {
+    const token = await dvsaToken();
+    return fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "X-API-Key": env("DVSA_API_KEY"),
+        Accept: "application/json",
       },
-    );
+      cache: "no-store",
+      signal: AbortSignal.timeout(10000),
+    }).catch((e) => {
+      throw new Error(`DVSA MOT history request failed: ${why(e, url)}`);
+    });
+  };
   let res = await call();
   if (res.status === 401) {
     tokenCache = null; // token expired or revoked: retry once with a fresh one
